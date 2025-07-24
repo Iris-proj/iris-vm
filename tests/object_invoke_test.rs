@@ -20,7 +20,7 @@ fn test_invoke_method() {
 
     let instance = Instance::new(class_rc.clone());
 
-    let mut vm = IrisVM::new();
+    let _vm = IrisVM::new();
 
     if let Some(method) = instance.get_method("greet") {
         match method.kind {

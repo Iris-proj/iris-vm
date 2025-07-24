@@ -1,8 +1,8 @@
-use crate::vm::{chunk::Chunk, opcode::OpCode, value::Value, function::Function};
+use crate::vm::{opcode::OpCode, value::Value, function::Function};
 use std::rc::Rc;
 
 pub struct IrisVM {
-    stack: Vec<Value>,
+    pub stack: Vec<Value>,
     frames: Vec<CallFrame>,
 }
 
