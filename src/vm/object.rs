@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 use crate::vm::function::Function;
 use crate::vm::value::Value;
 
+#[derive(Debug)]
 pub struct Class {
     pub name: String,
     pub type_id: usize,
@@ -36,6 +37,7 @@ impl Class {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance {
     pub class: Rc<Class>,
     pub fields: HashMap<String, Value>,
