@@ -13,7 +13,6 @@ The Iris project aims to create a comprehensive framework for building compilers
 * **Lightweight and Embeddable:** Iris VM is designed to be easily integrated into other applications.
 * **Fast Execution:** The VM is optimized for speed and performance.
 * **Object-Oriented:** Iris VM has built-in support for classes, instances, and methods.
-* **Garbage Collection:** The VM manages memory automatically, so you don't have to worry about memory leaks.
 * **Cross-Platform:** Iris VM can be compiled and run on various platforms.
 
 ## Getting Started
