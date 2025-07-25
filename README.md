@@ -1,4 +1,4 @@
-# Iris VM
+# Iris VM: A High-Performance Virtual Machine
 
 Iris VM is a lightweight, fast, and embeddable virtual machine. It's a core component of the Iris ecosystem, providing a runtime environment for executing Iris bytecode.
 
