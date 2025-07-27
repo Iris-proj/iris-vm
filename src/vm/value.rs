@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use crate::vm::object::Instance;
+use crate::vm::object::{Instance, Class};
 use crate::vm::function::Function;
 
 #[derive(Debug, Clone)]
@@ -12,6 +12,7 @@ pub enum Value {
     Object(Rc<Instance>),
     Function(Rc<Function>),
     NativeFunction(fn(Vec<Value>) -> Value),
+    Class(Rc<Class>),
 }
 
 impl PartialEq for Value {
@@ -30,7 +31,18 @@ impl PartialEq for Value {
                 let b_ptr: usize = *b as usize;
                 a_ptr == b_ptr
             }
+            (Class(a), Class(b)) => Rc::ptr_eq(a, b),
             _ => false,
+        }
+    }
+}
+
+impl Value {
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Value::Bool(b) => *b,
+            Value::Null => false,
+            _ => true,
         }
     }
 }
