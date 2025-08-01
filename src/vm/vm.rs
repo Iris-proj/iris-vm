@@ -868,6 +868,10 @@ impl IrisVM {
         Ok(self.frames.is_empty())
     }
 
+    pub fn add_global(&mut self, name: String, value: Value) {
+        self.globals.insert(name, value);
+    }
+
     pub fn run(&mut self) -> Result<(), VMError> {
         while let Some(frame) = self.frames.last_mut() {
             let bytecode = frame.function.bytecode.as_ref().ok_or(VMError::InvalidOperand("Bytecode not found".to_string()))?;
