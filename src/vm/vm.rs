@@ -46,10 +46,34 @@ impl fmt::Display for VMError {
 
 impl Error for VMError {}
 
+#[derive(Debug, Clone, Copy)]
+enum Numeric {
+    Int(i64),
+    Float(f64),
+}
+
+fn value_to_numeric(value: &Value) -> Option<Numeric> {
+    match value {
+        Value::I8(v) => Some(Numeric::Int(*v as i64)),
+        Value::I16(v) => Some(Numeric::Int(*v as i64)),
+        Value::I32(v) => Some(Numeric::Int(*v as i64)),
+        Value::I64(v) => Some(Numeric::Int(*v)),
+        Value::U8(v) => Some(Numeric::Int(*v as i64)),
+        Value::U16(v) => Some(Numeric::Int(*v as i64)),
+        Value::U32(v) => Some(Numeric::Int(*v as i64)),
+        Value::U64(v) => Some(Numeric::Int(*v as i64)),
+        Value::I128(v) => Some(Numeric::Int(*v as i64)),
+        Value::U128(v) => Some(Numeric::Int(*v as i64)),
+        Value::F32(v) => Some(Numeric::Float(*v as f64)),
+        Value::F64(v) => Some(Numeric::Float(*v)),
+        _ => None,
+    }
+}
+
 pub struct IrisVM {
     pub stack: Vec<Value>,
     frames: Vec<CallFrame>,
-    globals: HashMap<String, Value>,
+    globals: Vec<Value>,
     try_frames: Vec<TryFrame>,
 }
 
@@ -69,16 +93,16 @@ impl IrisVM {
         Self {
             stack: Vec::new(),
             frames: Vec::new(),
-            globals: HashMap::new(),
+            globals: Vec::new(),
             try_frames: Vec::new(),
         }
     }
 
-    pub fn push_frame(&mut self, function: Rc<Function>) -> Result<(), VMError> {
+        pub fn push_frame(&mut self, function: Rc<Function>, arg_count: usize) -> Result<(), VMError> {
         let frame = CallFrame {
             function,
             ip: 0,
-            stack_base: self.stack.len(),
+            stack_base: self.stack.len() - arg_count,
         };
         self.frames.push(frame);
         Ok(())
@@ -182,32 +206,30 @@ impl IrisVM {
         }
     }
 
-    fn handle_add(&mut self) -> Result<(), VMError> {
+            fn handle_add(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::I8(x + y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::I16(x + y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::I32(x + y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::I64(x + y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::I128(x + y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::U8(x + y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::U16(x + y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::U32(x + y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::U64(x + y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::U128(x + y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::F32(x + y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::F64(x + y)),
-            (Value::Str(mut s1), Value::Str(s2)) => {
-                s1.push_str(&s2);
-                Ok(Value::Str(s1))
-            }
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::F64(x as f64 + y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::F64(x + y as f64)),
-            // Add more type promotions as needed
-            _ => Err(VMError::TypeMismatch("Add operation on incompatible types".to_string())),
-        }?;
+
+        // Handle string concatenation separately
+        if let (Value::Str(s1), Value::Str(s2)) = (&a, &b) {
+            let mut new_s = s1.clone();
+            new_s.push_str(s2);
+            self.stack.push(Value::Str(new_s));
+            return Ok(());
+        }
+
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for addition.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for addition.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_add(val_b)),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a + val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a + val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 + val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -215,25 +237,18 @@ impl IrisVM {
     fn handle_sub(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::I8(x - y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::I16(x - y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::I32(x - y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::I64(x - y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::I128(x - y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::U8(x - y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::U16(x - y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::U32(x - y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::U64(x - y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::U128(x - y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::F32(x - y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::F64(x - y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::F64(x as f64 - y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::F64(x - y as f64)),
-            // Add more type promotions as needed
-            _ => Err(VMError::TypeMismatch("Subtract operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for subtraction.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for subtraction.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_sub(val_b)),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a - val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a - val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 - val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -241,25 +256,18 @@ impl IrisVM {
     fn handle_mul(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::I8(x * y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::I16(x * y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::I32(x * y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::I64(x * y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::I128(x * y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::U8(x * y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::U16(x * y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::U32(x * y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::U64(x * y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::U128(x * y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::F32(x * y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::F64(x * y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::F64(x as f64 * y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::F64(x * y as f64)),
-            // Add more type promotions as needed
-            _ => Err(VMError::TypeMismatch("Multiply operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for multiplication.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for multiplication.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_mul(val_b)),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a * val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a * val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 * val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -267,25 +275,23 @@ impl IrisVM {
     fn handle_div(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I8(x / y)) },
-            (Value::I16(x), Value::I16(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I16(x / y)) },
-            (Value::I32(x), Value::I32(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I32(x / y)) },
-            (Value::I64(x), Value::I64(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I64(x / y)) },
-            (Value::I128(x), Value::I128(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I128(x / y)) },
-            (Value::U8(x), Value::U8(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U8(x / y)) },
-            (Value::U16(x), Value::U16(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U16(x / y)) },
-            (Value::U32(x), Value::U32(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U32(x / y)) },
-            (Value::U64(x), Value::U64(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U64(x / y)) },
-            (Value::U128(x), Value::U128(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U128(x / y)) },
-            (Value::F32(x), Value::F32(y)) => Ok(Value::F32(x / y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::F64(x / y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::F64(x as f64 / y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::F64(x / y as f64)),
-            // Add more type promotions as needed
-            _ => Err(VMError::TypeMismatch("Divide operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for division.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for division.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => {
+                if val_b == 0 {
+                    return Err(VMError::DivisionByZero);
+                }
+                Value::I64(val_a / val_b)
+            }
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a / val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a / val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 / val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -293,19 +299,22 @@ impl IrisVM {
     fn handle_modulo(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I8(x % y)) },
-            (Value::I16(x), Value::I16(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I16(x % y)) },
-            (Value::I32(x), Value::I32(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I32(x % y)) },
-            (Value::I64(x), Value::I64(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I64(x % y)) },
-            (Value::I128(x), Value::I128(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::I128(x % y)) },
-            (Value::U8(x), Value::U8(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U8(x % y)) },
-            (Value::U16(x), Value::U16(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U16(x % y)) },
-            (Value::U32(x), Value::U32(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U32(x % y)) },
-            (Value::U64(x), Value::U64(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U64(x % y)) },
-            (Value::U128(x), Value::U128(y)) => if y == 0 { Err(VMError::DivisionByZero) } else { Ok(Value::U128(x % y)) },
-            _ => Err(VMError::TypeMismatch("Modulo operation on non-integer types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for modulo.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for modulo.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => {
+                if val_b == 0 {
+                    return Err(VMError::DivisionByZero);
+                }
+                Value::I64(val_a % val_b)
+            }
+            (Numeric::Float(_), Numeric::Float(_)) => return Err(VMError::TypeMismatch("Modulo cannot be applied to floats.".to_string())),
+            _ => return Err(VMError::TypeMismatch("Modulo requires integer operands.".to_string())),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -343,24 +352,18 @@ impl IrisVM {
     fn handle_greater(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::Bool(x > y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::Bool(x > y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::Bool(x > y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::Bool(x > y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::Bool(x > y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::Bool(x > y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::Bool(x > y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::Bool(x > y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::Bool(x > y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::Bool(x > y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::Bool(x > y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::Bool(x > y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::Bool(x as f64 > y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::Bool(x > y as f64)),
-            _ => Err(VMError::TypeMismatch("Greater operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a > val_b),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a > val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a > val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool((val_a as f64) > val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -368,24 +371,18 @@ impl IrisVM {
     fn handle_less(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::Bool(x < y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::Bool(x < y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::Bool(x < y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::Bool(x < y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::Bool(x < y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::Bool(x < y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::Bool(x < y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::Bool(x < y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::Bool(x < y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::Bool(x < y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::Bool(x < y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::Bool(x < y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::Bool((x as f64) < y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::Bool(x < y as f64)),
-            _ => Err(VMError::TypeMismatch("Less operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a < val_b),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a < val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a < val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool((val_a as f64) < val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -393,24 +390,18 @@ impl IrisVM {
     fn handle_greater_equal(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::Bool(x >= y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::Bool(x >= y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::Bool(x >= y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::Bool(x >= y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::Bool(x >= y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::Bool(x >= y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::Bool(x >= y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::Bool(x >= y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::Bool(x >= y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::Bool(x >= y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::Bool(x >= y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::Bool(x >= y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::Bool(x as f64 >= y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::Bool(x >= y as f64)),
-            _ => Err(VMError::TypeMismatch("GreaterEqual operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a >= val_b),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a >= val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a >= val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool(val_a as f64 >= val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -418,24 +409,18 @@ impl IrisVM {
     fn handle_less_equal(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let result = match (a, b) {
-            (Value::I8(x), Value::I8(y)) => Ok(Value::Bool(x <= y)),
-            (Value::I16(x), Value::I16(y)) => Ok(Value::Bool(x <= y)),
-            (Value::I32(x), Value::I32(y)) => Ok(Value::Bool(x <= y)),
-            (Value::I64(x), Value::I64(y)) => Ok(Value::Bool(x <= y)),
-            (Value::I128(x), Value::I128(y)) => Ok(Value::Bool(x <= y)),
-            (Value::U8(x), Value::U8(y)) => Ok(Value::Bool(x <= y)),
-            (Value::U16(x), Value::U16(y)) => Ok(Value::Bool(x <= y)),
-            (Value::U32(x), Value::U32(y)) => Ok(Value::Bool(x <= y)),
-            (Value::U64(x), Value::U64(y)) => Ok(Value::Bool(x <= y)),
-            (Value::U128(x), Value::U128(y)) => Ok(Value::Bool(x <= y)),
-            (Value::F32(x), Value::F32(y)) => Ok(Value::Bool(x <= y)),
-            (Value::F64(x), Value::F64(y)) => Ok(Value::Bool(x <= y)),
-            // Type promotion for mixed integer/float operations
-            (Value::I64(x), Value::F64(y)) => Ok(Value::Bool(x as f64 <= y)),
-            (Value::F64(x), Value::I64(y)) => Ok(Value::Bool(x <= y as f64)),
-            _ => Err(VMError::TypeMismatch("LessEqual operation on incompatible types".to_string())),
-        }?;
+        let num_a = value_to_numeric(&a)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
+        let num_b = value_to_numeric(&b)
+            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
+
+        let result = match (num_a, num_b) {
+            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a <= val_b),
+            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a <= val_b),
+            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a <= val_b as f64),
+            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool(val_a as f64 <= val_b),
+        };
+
         self.stack.push(result);
         Ok(())
     }
@@ -555,9 +540,10 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_call(&mut self) -> Result<(), VMError> {
+        fn handle_call(&mut self) -> Result<(), VMError> {
         let arg_count = self.read_byte()? as usize;
-        let callee = self.peek_stack(arg_count)?.clone();
+        let callee_pos = self.stack.len() - 1 - arg_count;
+        let callee = self.stack[callee_pos].clone();
 
         match callee {
             Value::Function(func) => {
@@ -569,7 +555,8 @@ impl IrisVM {
                         self.stack.push(result);
                     }
                     crate::vm::function::FunctionKind::Bytecode => {
-                        self.push_frame(func)?;
+                        self.stack.remove(callee_pos);
+                        self.push_frame(func, arg_count)?;
                     }
                 }
             }
@@ -597,8 +584,8 @@ impl IrisVM {
                             let result = (method.native.unwrap())(args);
                             self.stack.push(result);
                         }
-                        crate::vm::function::FunctionKind::Bytecode => {
-                            self.push_frame(method)?;
+                                                crate::vm::function::FunctionKind::Bytecode => {
+                            self.push_frame(method, arg_count)?;
                         }
                     }
                 } else {
@@ -624,35 +611,30 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_global(&mut self, name_index: usize) -> Result<(), VMError> {
-        let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Global name constant not found".to_string()))? {
-            Value::Str(s) => s.clone(),
-            _ => return Err(VMError::TypeMismatch("Global variable name is not a string".to_string())),
-        };
-        let value = self.globals.get(&name).ok_or(VMError::UndefinedVariable(name))?.clone();
+    fn handle_get_global(&mut self, slot: usize) -> Result<(), VMError> {
+        if slot >= self.globals.len() {
+            return Err(VMError::UndefinedVariable(format!("Global variable at slot {} not found", slot)));
+        }
+        let value = self.globals[slot].clone();
         self.stack.push(value);
         Ok(())
     }
 
-    fn handle_define_global(&mut self, name_index: usize) -> Result<(), VMError> {
-        let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Global name constant not found".to_string()))? {
-            Value::Str(s) => s.clone(),
-            _ => return Err(VMError::TypeMismatch("Global variable name is not a string".to_string())),
-        };
+    fn handle_define_global(&mut self, slot: usize) -> Result<(), VMError> {
         let value = self.pop_stack()?;
-        self.globals.insert(name, value);
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        self.globals[slot] = value;
         Ok(())
     }
 
-    fn handle_set_global(&mut self, name_index: usize) -> Result<(), VMError> {
-        let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Global name constant not found".to_string()))? {
-            Value::Str(s) => s.clone(),
-            _ => return Err(VMError::TypeMismatch("Global variable name is not a string".to_string())),
-        };
+    fn handle_set_global(&mut self, slot: usize) -> Result<(), VMError> {
         let value = self.peek_stack(0)?.clone();
-        if self.globals.insert(name.clone(), value).is_none() {
-            return Err(VMError::UndefinedVariable(name));
+        if slot >= self.globals.len() {
+            return Err(VMError::UndefinedVariable(format!("Global variable at slot {} not found for setting", slot)));
         }
+        self.globals[slot] = value;
         Ok(())
     }
 
@@ -868,8 +850,11 @@ impl IrisVM {
         Ok(self.frames.is_empty())
     }
 
-    pub fn add_global(&mut self, name: String, value: Value) {
-        self.globals.insert(name, value);
+    pub fn add_global(&mut self, slot: usize, value: Value) {
+        if slot >= self.globals.len() {
+            self.globals.resize(slot + 1, Value::Null);
+        }
+        self.globals[slot] = value;
     }
 
     pub fn run(&mut self) -> Result<(), VMError> {
@@ -883,7 +868,7 @@ impl IrisVM {
             let opcode: OpCode = bytecode[frame.ip].into();
             frame.ip += 1;
 
-            match opcode {
+                                                                                    match opcode {
                 OpCode::Unknown => return Err(VMError::UnknownOpCode),
                 OpCode::Nop => {},
 
@@ -954,28 +939,16 @@ impl IrisVM {
                     self.handle_set_local(slot)?
                 }
                 OpCode::GetGlobal8 => {
-                    let name_index = self.read_byte()? as usize;
-                    self.handle_get_global(name_index)?
-                }
-                OpCode::GetGlobal16 => {
-                    let name_index = self.read_u16()? as usize;
-                    self.handle_get_global(name_index)?
+                    let slot = self.read_byte()? as usize;
+                    self.handle_get_global(slot)?
                 }
                 OpCode::DefineGlobal8 => {
-                    let name_index = self.read_byte()? as usize;
-                    self.handle_define_global(name_index)?
-                }
-                OpCode::DefineGlobal16 => {
-                    let name_index = self.read_u16()? as usize;
-                    self.handle_define_global(name_index)?
+                    let slot = self.read_byte()? as usize;
+                    self.handle_define_global(slot)?
                 }
                 OpCode::SetGlobal8 => {
-                    let name_index = self.read_byte()? as usize;
-                    self.handle_set_global(name_index)?
-                }
-                OpCode::SetGlobal16 => {
-                    let name_index = self.read_u16()? as usize;
-                    self.handle_set_global(name_index)?
+                    let slot = self.read_byte()? as usize;
+                    self.handle_set_global(slot)?
                 }
 
                 OpCode::GetProperty8 => {
