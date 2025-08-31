@@ -26,12 +26,9 @@ pub enum OpCode {
     GetLocal16 = 16, // Gets a local variable by 16-bit index and pushes it onto the stack.
     SetLocal8 = 17, // Sets a local variable by 8-bit index with the value from the top of the stack.
     SetLocal16 = 18, // Sets a local variable by 16-bit index with the value from the top of the stack.
-    GetGlobal8 = 19, // Gets a global variable by 8-bit name index and pushes it onto the stack.
-    GetGlobal16 = 20, // Gets a global variable by 16-bit name index and pushes it onto the stack.
+    GetGlobal8 = 19, // Gets a global variable by 8-bit index and pushes it onto the stack.
     DefineGlobal8 = 21, // Defines a new global variable with an 8-bit name index.
-    DefineGlobal16 = 22, // Defines a new global variable with a 16-bit name index.
     SetGlobal8 = 23, // Sets an existing global variable by 8-bit name index.
-    SetGlobal16 = 24, // Sets an existing global variable by 16-bit name index.
 
     // == Object-Oriented Programming ==
     GetProperty8 = 25, // Gets a property of an object from the stack using an 8-bit name index.
@@ -123,11 +120,8 @@ impl From<u8> for OpCode {
             17 => OpCode::SetLocal8,
             18 => OpCode::SetLocal16,
             19 => OpCode::GetGlobal8,
-            20 => OpCode::GetGlobal16,
             21 => OpCode::DefineGlobal8,
-            22 => OpCode::DefineGlobal16,
             23 => OpCode::SetGlobal8,
-            24 => OpCode::SetGlobal16,
 
             25 => OpCode::GetProperty8,
             26 => OpCode::GetProperty16,

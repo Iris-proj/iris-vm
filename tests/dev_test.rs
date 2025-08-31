@@ -19,6 +19,6 @@ fn test_invoke_method() {
 
     let function = Rc::new(Function::new_bytecode(String::from("test_func"), 0, chunk.code, chunk.constants));
     let mut vm = IrisVM::new();
-    let _ = vm.push_frame(function);
+        let _ = vm.push_frame(function, 0);
     let _ = vm.run();
 }

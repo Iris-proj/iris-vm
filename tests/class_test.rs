@@ -49,7 +49,7 @@ fn test_class_instance_and_method_call() {
     ));
 
     // 6. Push the main function frame and run the VM
-    vm.push_frame(main_function).unwrap();
+        vm.push_frame(main_function, 0).unwrap();
     let result = vm.run();
 
     // 7. Assert the results
