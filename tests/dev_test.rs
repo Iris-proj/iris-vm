@@ -1,7 +1,9 @@
 use std::rc::Rc;
-use iris_vm::{
-    vm::{function::Function, vm::IrisVM},
-    vm::value::Value,
+use iris_vm::vm::{
+    chunk::ChunkWriter,
+    function::Function,
+    value::Value,
+    vm::IrisVM,
 };
 use iris_vm::vm::chunk::Chunk;
 use iris_vm::vm::opcode::OpCode;
