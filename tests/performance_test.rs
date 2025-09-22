@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use iris_vm::vm::{function::Function, opcode::OpCode, value::Value, vm::IrisVM};
 use serde::{Serialize, Deserialize};
-use std::fs::{File, self};
+use std::fs::File;
 use std::io::{Read, Write};
 
 // A simplified, serializable version of the Value enum for testing purposes.

@@ -130,7 +130,7 @@ impl IrisVM {
     fn read_u16(&mut self) -> Result<u16, VMError> {
         let byte1 = self.read_byte()?;
         let byte2 = self.read_byte()?;
-        Ok(((byte1 as u16) << 8) | (byte2 as u16))
+        Ok(u16::from_be_bytes([byte1, byte2]))
     }
 
     #[allow(dead_code)]
