@@ -27,7 +27,7 @@ fn test_class_instance_and_method_call() {
 
     // 4. Add the fully formed class to the VM's global variables
     let class_value = Value::Class(Rc::new(test_class));
-    vm.add_global("TestClass".to_string(), class_value);
+    vm.add_global(0, class_value);
 
     // 5. The main script to be executed by the VM.
     // This script will find the class, create an instance, and call a method.

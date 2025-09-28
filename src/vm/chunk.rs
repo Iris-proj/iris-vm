@@ -29,12 +29,12 @@ impl Chunk {
         let current_index = self.constants.len() - 1;
         if current_index > u16::max_value() as usize {todo!("Handle this error.");}
         if current_index <= u8::max_value() as usize {
-            self.write(OpCode::Constant8);
+            self.write(OpCode::PushConstant8);
             self.write(current_index as u8);
             return;
         }
 
-        self.write(OpCode::Constant16);
+        self.write(OpCode::PushConstant16);
         self.write(current_index as u16);
     }
 }

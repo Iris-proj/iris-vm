@@ -206,7 +206,661 @@ impl IrisVM {
         }
     }
 
-            fn handle_add(&mut self) -> Result<(), VMError> {
+    fn handle_rotate_top_three(&mut self) -> Result<(), VMError> {
+        if self.stack.len() < 3 {
+            return Err(VMError::StackUnderflow);
+        }
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        self.stack.push(c);
+        self.stack.push(a);
+        self.stack.push(b);
+        Ok(())
+    }
+
+    fn handle_peek_stack(&mut self) -> Result<(), VMError> {
+        let offset = self.read_byte()? as usize;
+        let value = self.peek_stack(offset)?.clone();
+        self.stack.push(value);
+        Ok(())
+    }
+
+    fn handle_roll_stack_items(&mut self) -> Result<(), VMError> {
+        let count = self.read_byte()? as usize;
+        if self.stack.len() < count {
+            return Err(VMError::StackUnderflow);
+        }
+        let top = self.stack.len();
+        self.stack[top - count..top].rotate_right(1);
+        Ok(())
+    }
+
+    fn handle_drop_multiple(&mut self) -> Result<(), VMError> {
+        let count = self.read_byte()? as usize;
+        if self.stack.len() < count {
+            return Err(VMError::StackUnderflow);
+        }
+        self.stack.truncate(self.stack.len() - count);
+        Ok(())
+    }
+
+    fn handle_duplicate_multiple(&mut self) -> Result<(), VMError> {
+        let count = self.read_byte()? as usize;
+        if self.stack.len() < count {
+            return Err(VMError::StackUnderflow);
+        }
+        let top = self.stack.len();
+        for i in 0..count {
+            self.stack.push(self.stack[top - count + i].clone());
+        }
+        Ok(())
+    }
+
+    fn handle_swap_top_two_pairs(&mut self) -> Result<(), VMError> {
+        if self.stack.len() < 4 {
+            return Err(VMError::StackUnderflow);
+        }
+        let d = self.pop_stack()?;
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        self.stack.push(c);
+        self.stack.push(d);
+        self.stack.push(a);
+        self.stack.push(b);
+        Ok(())
+    }
+
+    fn handle_swap_multiple(&mut self) -> Result<(), VMError> {
+        let count = self.read_byte()? as usize;
+        if self.stack.len() < count * 2 {
+            return Err(VMError::StackUnderflow);
+        }
+        let top = self.stack.len();
+        for i in 0..count {
+            self.stack.swap(top - 1 - i, top - 1 - i - count);
+        }
+        Ok(())
+    }
+
+    fn handle_call_dynamic_method(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_initialize_class(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_check_cast_object(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_instance_of_check(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_load_method_handle(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_bind_method_handle(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_virtual_table(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_set_virtual_table(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_allocate_object(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_free_object(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_short_jump(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_jump_if_true(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_jump_if_null(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_jump_if_non_null(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_loop_start_marker(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_loop_end_marker(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_tail_call_function(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_table_switch(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_lookup_switch(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_range_switch(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_catch_exception(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_finally_block(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_unwind_stack(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_boolean_and_operation(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_boolean_or_operation(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_bitwise_and_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_bitwise_or_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_bitwise_xor_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_bitwise_not_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_left_shift_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_right_shift_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_unsigned_right_shift_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_unsigned_right_shift_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_rotate_left_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_rotate_right_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_subtract_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_subtract_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_subtract_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_multiply_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_multiply_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_multiply_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_divide_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_divide_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_divide_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_modulo_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_negate_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_negate_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_negate_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_increment_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_decrement_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_increment_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_decrement_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_int32_with_constant(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_int64_with_constant(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_multiply_int32_with_constant(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_multiply_int64_with_constant(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_fused_multiply_add_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_fused_multiply_add_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_absolute_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_absolute_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_absolute_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_absolute_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_floor_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_ceil_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_round_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_truncate_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_square_root_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_square_root_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_equal_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_equal_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_equal_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_not_equal_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_not_equal_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_not_equal_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_than_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_than_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_than_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_than_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_than_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_than_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_compare_and_branch_equal_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_compare_and_branch_not_equal_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_compare_and_branch_less_than_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_compare_and_branch_greater_than_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_unsigned8(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_unsigned16(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_unsigned32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_unsigned64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_unsigned8(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_unsigned16(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_unsigned32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_unsigned64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_unsigned8(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_unsigned16(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_unsigned32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_greater_or_equal_unsigned64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_unsigned8(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_unsigned16(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_unsigned32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_less_or_equal_unsigned64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int32_to_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int32_to_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int32_to_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int64_to_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int64_to_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_int64_to_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float32_to_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float32_to_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float32_to_float64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float64_to_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float64_to_int64(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_convert_float64_to_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_array_length(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_resize_array(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_array_index_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_set_array_index_float32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_array_index_fast_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_set_array_index_fast_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_map_contains_key(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_map_remove_key(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_map_get_or_default_value(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_allocate_slice(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_atomic_add_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_atomic_subtract_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_atomic_compare_and_swap_int32(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_enter_monitor(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_exit_monitor(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_yield_current_thread(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_call_with_inline_cache(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_call_with_inline_cache_inline(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_property_with_inline_cache(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_get_property_with_inline_cache_inline(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_set_property_with_inline_cache(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_load_method_inline_cache(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_megamorphic_method_call(&mut self) -> Result<(), VMError> {
+        todo!()
+    }
+
+    fn handle_add_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
 
@@ -234,7 +888,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_sub(&mut self) -> Result<(), VMError> {
+    fn handle_subtract_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -253,7 +907,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_mul(&mut self) -> Result<(), VMError> {
+    fn handle_multiply_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -272,7 +926,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_div(&mut self) -> Result<(), VMError> {
+    fn handle_divide_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -296,7 +950,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_modulo(&mut self) -> Result<(), VMError> {
+    fn handle_modulo_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -319,7 +973,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_negate(&mut self) -> Result<(), VMError> {
+    fn handle_negate_int32(&mut self) -> Result<(), VMError> {
         let val = self.pop_stack()?;
         let result = match val {
             Value::I8(x) => Value::I8(-x),
@@ -335,21 +989,21 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_equal(&mut self) -> Result<(), VMError> {
+    fn handle_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         self.stack.push(Value::Bool(a == b));
         Ok(())
     }
 
-    fn handle_not_equal(&mut self) -> Result<(), VMError> {
+    fn handle_not_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         self.stack.push(Value::Bool(a != b));
         Ok(())
     }
 
-    fn handle_greater(&mut self) -> Result<(), VMError> {
+    fn handle_greater_than_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -368,7 +1022,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_less(&mut self) -> Result<(), VMError> {
+    fn handle_less_than_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -387,7 +1041,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_greater_equal(&mut self) -> Result<(), VMError> {
+    fn handle_greater_or_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -406,7 +1060,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_less_equal(&mut self) -> Result<(), VMError> {
+    fn handle_less_or_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let num_a = value_to_numeric(&a)
@@ -425,27 +1079,27 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_logical_and(&mut self) -> Result<(), VMError> {
+    fn handle_logical_and_operation(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         self.stack.push(Value::Bool(a.is_truthy() && b.is_truthy()));
         Ok(())
     }
 
-    fn handle_logical_or(&mut self) -> Result<(), VMError> {
+    fn handle_logical_or_operation(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         self.stack.push(Value::Bool(a.is_truthy() || b.is_truthy()));
         Ok(())
     }
 
-    fn handle_logical_not(&mut self) -> Result<(), VMError> {
+    fn handle_logical_not_operation(&mut self) -> Result<(), VMError> {
         let value = self.pop_stack()?;
         self.stack.push(Value::Bool(!value.is_truthy()));
         Ok(())
     }
 
-    fn handle_bitwise_and(&mut self) -> Result<(), VMError> {
+    fn handle_bitwise_and_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let result = match (a, b) {
@@ -456,7 +1110,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_bitwise_or(&mut self) -> Result<(), VMError> {
+    fn handle_bitwise_or_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let result = match (a, b) {
@@ -467,7 +1121,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_bitwise_xor(&mut self) -> Result<(), VMError> {
+    fn handle_bitwise_xor_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let result = match (a, b) {
@@ -478,7 +1132,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_bitwise_not(&mut self) -> Result<(), VMError> {
+    fn handle_bitwise_not_int32(&mut self) -> Result<(), VMError> {
         let val = self.pop_stack()?;
         let result = match val {
             Value::I64(x) => Value::I64(!x),
@@ -488,7 +1142,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_left_shift(&mut self) -> Result<(), VMError> {
+    fn handle_left_shift_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let result = match (a, b) {
@@ -499,7 +1153,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_right_shift(&mut self) -> Result<(), VMError> {
+    fn handle_right_shift_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
         let result = match (a, b) {
@@ -510,13 +1164,13 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_print(&mut self) -> Result<(), VMError> {
+    fn handle_print_top_of_stack(&mut self) -> Result<(), VMError> {
         let val = self.pop_stack()?;
         println!("{:?}", val);
         Ok(())
     }
 
-    fn handle_jump(&mut self) -> Result<(), VMError> {
+    fn handle_unconditional_jump(&mut self) -> Result<(), VMError> {
         let offset = self.read_byte()? as usize;
         let frame = self.current_frame_mut()?;
         frame.ip += offset;
@@ -533,14 +1187,14 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_loop(&mut self) -> Result<(), VMError> {
+    fn handle_loop_jump(&mut self) -> Result<(), VMError> {
         let offset = self.read_byte()? as usize;
         let frame = self.current_frame_mut()?;
         frame.ip -= offset;
         Ok(())
     }
 
-        fn handle_call(&mut self) -> Result<(), VMError> {
+        fn handle_call_function(&mut self) -> Result<(), VMError> {
         let arg_count = self.read_byte()? as usize;
         let callee_pos = self.stack.len() - 1 - arg_count;
         let callee = self.stack[callee_pos].clone();
@@ -565,7 +1219,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_invoke(&mut self, method_name_index: usize, arg_count: usize) -> Result<(), VMError> {
+    fn handle_invoke_method(&mut self, method_name_index: usize, arg_count: usize) -> Result<(), VMError> {
         let method_name = match self.current_frame()?.function.constants().get(method_name_index).ok_or(VMError::InvalidOperand("Method name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Invoke method name is not a string".to_string())),
@@ -597,21 +1251,21 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_local(&mut self, slot: usize) -> Result<(), VMError> {
+    fn handle_get_local_variable(&mut self, slot: usize) -> Result<(), VMError> {
         let stack_base = self.current_frame()?.stack_base;
         let value = self.stack[stack_base + slot].clone();
         self.stack.push(value);
         Ok(())
     }
 
-    fn handle_set_local(&mut self, slot: usize) -> Result<(), VMError> {
+    fn handle_set_local_variable(&mut self, slot: usize) -> Result<(), VMError> {
         let value = self.peek_stack(0)?.clone();
         let stack_base = self.current_frame()?.stack_base;
         self.stack[stack_base + slot] = value;
         Ok(())
     }
 
-    fn handle_get_global(&mut self, slot: usize) -> Result<(), VMError> {
+    fn handle_get_global_variable(&mut self, slot: usize) -> Result<(), VMError> {
         if slot >= self.globals.len() {
             return Err(VMError::UndefinedVariable(format!("Global variable at slot {} not found", slot)));
         }
@@ -620,7 +1274,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_define_global(&mut self, slot: usize) -> Result<(), VMError> {
+    fn handle_define_global_variable(&mut self, slot: usize) -> Result<(), VMError> {
         let value = self.pop_stack()?;
         if slot >= self.globals.len() {
             self.globals.resize(slot + 1, Value::Null);
@@ -629,7 +1283,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_set_global(&mut self, slot: usize) -> Result<(), VMError> {
+    fn handle_set_global_variable(&mut self, slot: usize) -> Result<(), VMError> {
         let value = self.peek_stack(0)?.clone();
         if slot >= self.globals.len() {
             return Err(VMError::UndefinedVariable(format!("Global variable at slot {} not found for setting", slot)));
@@ -638,7 +1292,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_property(&mut self, name_index: usize) -> Result<(), VMError> {
+    fn handle_get_object_property(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Property name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Property name is not a string".to_string())),
@@ -657,7 +1311,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_set_property(&mut self, name_index: usize) -> Result<(), VMError> {
+    fn handle_set_object_property(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Property name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Property name is not a string".to_string())),
@@ -673,7 +1327,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_new_instance(&mut self) -> Result<(), VMError> {
+    fn handle_create_new_instance(&mut self) -> Result<(), VMError> {
         let class_val = self.pop_stack()?;
         match class_val {
             Value::Class(class_rc) => {
@@ -685,7 +1339,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_super(&mut self, method_name_index: usize) -> Result<(), VMError> {
+    fn handle_get_super_class_method(&mut self, method_name_index: usize) -> Result<(), VMError> {
         let method_name = match self.current_frame()?.function.constants().get(method_name_index).ok_or(VMError::InvalidOperand("Super method name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Super method name is not a string".to_string())),
@@ -706,7 +1360,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_class(&mut self, name_index: usize) -> Result<(), VMError> {
+    fn handle_define_class(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Class name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Class name is not a string".to_string())),
@@ -716,7 +1370,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_new_array(&mut self, num_elements: usize) -> Result<(), VMError> {
+    fn handle_create_new_array(&mut self, num_elements: usize) -> Result<(), VMError> {
         if self.stack.len() < num_elements {
             return Err(VMError::StackUnderflow);
         }
@@ -725,7 +1379,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_index(&mut self) -> Result<(), VMError> {
+    fn handle_get_array_index(&mut self) -> Result<(), VMError> {
         let index_val = self.pop_stack()?;
         let array_val = self.pop_stack()?;
 
@@ -743,7 +1397,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_set_index(&mut self) -> Result<(), VMError> {
+    fn handle_set_array_index(&mut self) -> Result<(), VMError> {
         let value = self.pop_stack()?;
         let index_val = self.pop_stack()?;
         let array_val = self.pop_stack()?;
@@ -762,7 +1416,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_new_map(&mut self, num_entries: usize) -> Result<(), VMError> {
+    fn handle_create_new_map(&mut self, num_entries: usize) -> Result<(), VMError> {
         if self.stack.len() < num_entries * 2 {
             return Err(VMError::StackUnderflow);
         }
@@ -780,7 +1434,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_field(&mut self, name_index: usize) -> Result<(), VMError> {
+    fn handle_get_object_field(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Field name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Field name is not a string".to_string())),
@@ -797,7 +1451,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_set_field(&mut self, name_index: usize) -> Result<(), VMError> {
+    fn handle_set_object_field(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Field name constant not found".to_string()))? {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Field name is not a string".to_string())),
@@ -814,7 +1468,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_throw(&mut self) -> Result<(), VMError> {
+    fn handle_throw_exception(&mut self) -> Result<(), VMError> {
         let exception = self.pop_stack()?;
         if let Some(try_frame) = self.try_frames.pop() {
             self.current_frame_mut()?.ip = try_frame.ip;
@@ -826,7 +1480,7 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_try(&mut self) -> Result<(), VMError> {
+    fn handle_begin_try_block(&mut self) -> Result<(), VMError> {
         let offset = self.read_byte()? as usize;
         self.try_frames.push(TryFrame {
             ip: self.current_frame()?.ip + offset,
@@ -835,12 +1489,12 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_end_try(&mut self) -> Result<(), VMError> {
+    fn handle_end_try_block(&mut self) -> Result<(), VMError> {
         self.try_frames.pop().ok_or(VMError::NoTryFrame)?;
         Ok(())
     }
 
-    fn handle_return(&mut self) -> Result<bool, VMError> {
+    fn handle_return_from_function(&mut self) -> Result<bool, VMError> {
         let result = self.pop_stack()?;
         let frame = self.frames.pop().ok_or(VMError::NoActiveCallFrame)?;
 
@@ -868,206 +1522,362 @@ impl IrisVM {
             let opcode: OpCode = bytecode[frame.ip].into();
             frame.ip += 1;
 
-                                                                                    match opcode {
+            match opcode {
                 OpCode::Unknown => return Err(VMError::UnknownOpCode),
-                OpCode::Nop => {},
+                OpCode::NoOperation => {},
 
-                OpCode::Constant8 => {
+                OpCode::PushConstant8 => {
                     let constant = self.read_constant8()?;
                     self.stack.push(constant);
                 }
-                OpCode::Constant16 => {
+                OpCode::PushConstant16 => {
                     let constant = self.read_constant16()?;
                     self.stack.push(constant);
                 }
-                OpCode::Null => self.stack.push(Value::Null),
-                OpCode::True => self.stack.push(Value::Bool(true)),
-                OpCode::False => self.stack.push(Value::Bool(false)),
-                OpCode::Pop => {
+                OpCode::PushNull => self.stack.push(Value::Null),
+                OpCode::PushTrue => self.stack.push(Value::Bool(true)),
+                OpCode::PushFalse => self.stack.push(Value::Bool(false)),
+                OpCode::PopStack => {
                     self.pop_stack()?;
                 }
-                OpCode::Dup => {
+                OpCode::DuplicateTop => {
                     let value = self.peek_stack(0)?.clone();
                     self.stack.push(value);
                 }
-                OpCode::Swap => {
+                OpCode::SwapTopTwo => {
                     let a = self.pop_stack()?;
                     let b = self.pop_stack()?;
                     self.stack.push(a);
                     self.stack.push(b);
                 }
+                OpCode::RotateTopThree => self.handle_rotate_top_three()?,
+                OpCode::PickStackItem => self.handle_peek_stack()?,
+                OpCode::RollStackItems => self.handle_roll_stack_items()?,
+                OpCode::PeekStack => self.handle_peek_stack()?,
+                OpCode::DropMultiple => self.handle_drop_multiple()?,
+                OpCode::DuplicateMultiple => self.handle_duplicate_multiple()?,
+                OpCode::SwapTopTwoPairs => self.handle_swap_top_two_pairs()?,
+                OpCode::SwapMultiple => self.handle_swap_multiple()?,
 
-                OpCode::LoadImmI8 => {
+                OpCode::LoadImmediateI8 => {
                     let value = self.read_i8()?;
                     self.stack.push(Value::I8(value));
                 }
-                OpCode::LoadImmI16 => {
+                OpCode::LoadImmediateI16 => {
                     let value = self.read_i16()?;
                     self.stack.push(Value::I16(value));
                 }
-                OpCode::LoadImmI32 => {
+                OpCode::LoadImmediateI32 => {
                     let value = self.read_i32()?;
                     self.stack.push(Value::I32(value));
                 }
-                OpCode::LoadImmI64 => {
+                OpCode::LoadImmediateI64 => {
                     let value = self.read_i64()?;
                     self.stack.push(Value::I64(value));
                 }
-                OpCode::LoadImmF32 => {
+                OpCode::LoadImmediateF32 => {
                     let value = self.read_f32()?;
                     self.stack.push(Value::F32(value));
                 }
-                OpCode::LoadImmF64 => {
+                OpCode::LoadImmediateF64 => {
                     let value = self.read_f64()?;
                     self.stack.push(Value::F64(value));
                 }
 
-                OpCode::GetLocal8 => {
+                OpCode::GetLocalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_get_local(slot)?
+                    self.handle_get_local_variable(slot)?
                 }
-                OpCode::GetLocal16 => {
+                OpCode::GetLocalVariable16 => {
                     let slot = self.read_u16()? as usize;
-                    self.handle_get_local(slot)?
+                    self.handle_get_local_variable(slot)?
                 }
-                OpCode::SetLocal8 => {
+                OpCode::SetLocalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_set_local(slot)?
+                    self.handle_set_local_variable(slot)?
                 }
-                OpCode::SetLocal16 => {
+                OpCode::SetLocalVariable16 => {
                     let slot = self.read_u16()? as usize;
-                    self.handle_set_local(slot)?
+                    self.handle_set_local_variable(slot)?
                 }
-                OpCode::GetGlobal8 => {
+                OpCode::GetGlobalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_get_global(slot)?
+                    self.handle_get_global_variable(slot)?
                 }
-                OpCode::DefineGlobal8 => {
+                OpCode::DefineGlobalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_define_global(slot)?
+                    self.handle_define_global_variable(slot)?
                 }
-                OpCode::SetGlobal8 => {
+                OpCode::SetGlobalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_set_global(slot)?
+                    self.handle_set_global_variable(slot)?
                 }
 
-                OpCode::GetProperty8 => {
+                OpCode::GetObjectProperty8 => {
                     let name_index = self.read_byte()? as usize;
-                    self.handle_get_property(name_index)?
+                    self.handle_get_object_property(name_index)?
                 }
-                OpCode::GetProperty16 => {
+                OpCode::GetObjectProperty16 => {
                     let name_index = self.read_u16()? as usize;
-                    self.handle_get_property(name_index)?
+                    self.handle_get_object_property(name_index)?
                 }
-                OpCode::SetProperty8 => {
+                OpCode::SetObjectProperty8 => {
                     let name_index = self.read_byte()? as usize;
-                    self.handle_set_property(name_index)?
+                    self.handle_set_object_property(name_index)?
                 }
-                OpCode::SetProperty16 => {
+                OpCode::SetObjectProperty16 => {
                     let name_index = self.read_u16()? as usize;
-                    self.handle_set_property(name_index)?
+                    self.handle_set_object_property(name_index)?
                 }
-                OpCode::NewInstance => self.handle_new_instance()?,
-                OpCode::Invoke8 => {
+                OpCode::CreateNewInstance => self.handle_create_new_instance()?,
+                OpCode::InvokeMethod8 => {
                     let method_name_index = self.read_byte()? as usize;
                     let arg_count = self.read_byte()? as usize;
-                    self.handle_invoke(method_name_index, arg_count)?
+                    self.handle_invoke_method(method_name_index, arg_count)?
                 }
-                OpCode::Invoke16 => {
+                OpCode::InvokeMethod16 => {
                     let method_name_index = self.read_u16()? as usize;
                     let arg_count = self.read_byte()? as usize;
-                    self.handle_invoke(method_name_index, arg_count)?
+                    self.handle_invoke_method(method_name_index, arg_count)?
                 }
-                OpCode::GetSuper8 => {
+                OpCode::CallDynamicMethod => self.handle_call_dynamic_method()?,
+                OpCode::GetSuperClassMethod8 => {
                     let method_name_index = self.read_byte()? as usize;
-                    self.handle_get_super(method_name_index)?
+                    self.handle_get_super_class_method(method_name_index)?
                 }
-                OpCode::GetSuper16 => {
+                OpCode::GetSuperClassMethod16 => {
                     let method_name_index = self.read_u16()? as usize;
-                    self.handle_get_super(method_name_index)?
+                    self.handle_get_super_class_method(method_name_index)?
                 }
-                OpCode::Class8 => {
+                OpCode::DefineClass8 => {
                     let name_index = self.read_byte()? as usize;
-                    self.handle_class(name_index)?
+                    self.handle_define_class(name_index)?
                 }
-                OpCode::Class16 => {
+                OpCode::DefineClass16 => {
                     let name_index = self.read_u16()? as usize;
-                    self.handle_class(name_index)?
+                    self.handle_define_class(name_index)?
                 }
+                OpCode::InitializeClass => self.handle_initialize_class()?,
+                OpCode::CheckCastObject => self.handle_check_cast_object()?,
+                OpCode::InstanceOfCheck => self.handle_instance_of_check()?,
+                OpCode::LoadMethodHandle => self.handle_load_method_handle()?,
+                OpCode::BindMethodHandle => self.handle_bind_method_handle()?,
+                OpCode::GetVirtualTable => self.handle_get_virtual_table()?,
+                OpCode::SetVirtualTable => self.handle_set_virtual_table()?,
+                OpCode::AllocateObject => self.handle_allocate_object()?,
+                OpCode::FreeObject => self.handle_free_object()?,
 
-                OpCode::Jump => self.handle_jump()?,
+                OpCode::UnconditionalJump => self.handle_unconditional_jump()?,
+                OpCode::ShortJump => self.handle_short_jump()?,
+                OpCode::JumpIfTrue => self.handle_jump_if_true()?,
                 OpCode::JumpIfFalse => self.handle_jump_if_false()?,
-                OpCode::Loop => self.handle_loop()?,
-                OpCode::Call => self.handle_call()?,
-                OpCode::Return => {
-                    if self.handle_return()? {
+                OpCode::JumpIfNull => self.handle_jump_if_null()?,
+                OpCode::JumpIfNonNull => self.handle_jump_if_non_null()?,
+                OpCode::LoopJump => self.handle_loop_jump()?,
+                OpCode::LoopStartMarker => self.handle_loop_start_marker()?,
+                OpCode::LoopEndMarker => self.handle_loop_end_marker()?,
+                OpCode::CallFunction => self.handle_call_function()?,
+                OpCode::ReturnFromFunction => {
+                    if self.handle_return_from_function()? {
                         break;
                     }
                 }
+                OpCode::TailCallFunction => self.handle_tail_call_function()?,
+                OpCode::TableSwitch => self.handle_table_switch()?,
+                OpCode::LookupSwitch => self.handle_lookup_switch()?,
+                OpCode::RangeSwitch => self.handle_range_switch()?,
+                OpCode::ThrowException => self.handle_throw_exception()?,
+                OpCode::BeginTryBlock => self.handle_begin_try_block()?,
+                OpCode::CatchException => self.handle_catch_exception()?,
+                OpCode::FinallyBlock => self.handle_finally_block()?,
+                OpCode::EndTryBlock => self.handle_end_try_block()?,
+                OpCode::UnwindStack => self.handle_unwind_stack()?,
 
-                OpCode::Equal => self.handle_equal()?,
-                OpCode::NotEqual => self.handle_not_equal()?,
-                OpCode::Greater => self.handle_greater()?,
-                OpCode::Less => self.handle_less()?,
-                OpCode::GreaterEqual => self.handle_greater_equal()?,
-                OpCode::LessEqual => self.handle_less_equal()?,
-                OpCode::LogicalAnd => self.handle_logical_and()?,
-                OpCode::LogicalOr => self.handle_logical_or()?,
-                OpCode::LogicalNot => self.handle_logical_not()?,
+                OpCode::EqualInt32 => self.handle_equal_int32()?,
+                OpCode::EqualInt64 => self.handle_equal_int64()?,
+                OpCode::EqualFloat32 => self.handle_equal_float32()?,
+                OpCode::EqualFloat64 => self.handle_equal_float64()?,
+                OpCode::NotEqualInt32 => self.handle_not_equal_int32()?,
+                OpCode::NotEqualInt64 => self.handle_not_equal_int64()?,
+                OpCode::NotEqualFloat32 => self.handle_not_equal_float32()?,
+                OpCode::NotEqualFloat64 => self.handle_not_equal_float64()?,
+                OpCode::GreaterThanInt32 => self.handle_greater_than_int32()?,
+                OpCode::GreaterThanInt64 => self.handle_greater_than_int64()?,
+                OpCode::GreaterThanFloat32 => self.handle_greater_than_float32()?,
+                OpCode::GreaterThanFloat64 => self.handle_greater_than_float64()?,
+                OpCode::LessThanInt32 => self.handle_less_than_int32()?,
+                OpCode::LessThanInt64 => self.handle_less_than_int64()?,
+                OpCode::LessThanFloat32 => self.handle_less_than_float32()?,
+                OpCode::LessThanFloat64 => self.handle_less_than_float64()?,
+                OpCode::GreaterOrEqualInt32 => self.handle_greater_or_equal_int32()?,
+                OpCode::GreaterOrEqualInt64 => self.handle_greater_or_equal_int64()?,
+                OpCode::GreaterOrEqualFloat32 => self.handle_greater_or_equal_float32()?,
+                OpCode::GreaterOrEqualFloat64 => self.handle_greater_or_equal_float64()?,
+                OpCode::LessOrEqualInt32 => self.handle_less_or_equal_int32()?,
+                OpCode::LessOrEqualInt64 => self.handle_less_or_equal_int64()?,
+                OpCode::LessOrEqualFloat32 => self.handle_less_or_equal_float32()?,
+                OpCode::LessOrEqualFloat64 => self.handle_less_or_equal_float64()?,
+                OpCode::CompareAndBranchEqualInt32 => self.handle_compare_and_branch_equal_int32()?,
+                OpCode::CompareAndBranchNotEqualInt32 => self.handle_compare_and_branch_not_equal_int32()?,
+                OpCode::CompareAndBranchLessThanInt32 => self.handle_compare_and_branch_less_than_int32()?,
+                OpCode::CompareAndBranchGreaterThanInt32 => self.handle_compare_and_branch_greater_than_int32()?,
 
-                OpCode::Add => self.handle_add()?,
-                OpCode::Sub => self.handle_sub()?,
-                OpCode::Mul => self.handle_mul()?,
-                OpCode::Div => self.handle_div()?,
-                OpCode::Modulo => self.handle_modulo()?,
-                OpCode::Negate => self.handle_negate()?,
-                OpCode::BitwiseAnd => self.handle_bitwise_and()?,
-                OpCode::BitwiseOr => self.handle_bitwise_or()?,
-                OpCode::BitwiseXor => self.handle_bitwise_xor()?,
-                OpCode::BitwiseNot => self.handle_bitwise_not()?,
-                OpCode::LeftShift => self.handle_left_shift()?,
-                OpCode::RightShift => self.handle_right_shift()?,
+                OpCode::GreaterUnsigned8 => self.handle_greater_unsigned8()?,
+                OpCode::GreaterUnsigned16 => self.handle_greater_unsigned16()?,
+                OpCode::GreaterUnsigned32 => self.handle_greater_unsigned32()?,
+                OpCode::GreaterUnsigned64 => self.handle_greater_unsigned64()?,
+                OpCode::LessUnsigned8 => self.handle_less_unsigned8()?,
+                OpCode::LessUnsigned16 => self.handle_less_unsigned16()?,
+                OpCode::LessUnsigned32 => self.handle_less_unsigned32()?,
+                OpCode::LessUnsigned64 => self.handle_less_unsigned64()?,
+                OpCode::GreaterOrEqualUnsigned8 => self.handle_greater_or_equal_unsigned8()?,
+                OpCode::GreaterOrEqualUnsigned16 => self.handle_greater_or_equal_unsigned16()?,
+                OpCode::GreaterOrEqualUnsigned32 => self.handle_greater_or_equal_unsigned32()?,
+                OpCode::GreaterOrEqualUnsigned64 => self.handle_greater_or_equal_unsigned64()?,
+                OpCode::LessOrEqualUnsigned8 => self.handle_less_or_equal_unsigned8()?,
+                OpCode::LessOrEqualUnsigned16 => self.handle_less_or_equal_unsigned16()?,
+                OpCode::LessOrEqualUnsigned32 => self.handle_less_or_equal_unsigned32()?,
+                OpCode::LessOrEqualUnsigned64 => self.handle_less_or_equal_unsigned64()?,
+                OpCode::ConvertInt32ToInt64 => self.handle_convert_int32_to_int64()?,
+                OpCode::ConvertInt32ToFloat32 => self.handle_convert_int32_to_float32()?,
+                OpCode::ConvertInt32ToFloat64 => self.handle_convert_int32_to_float64()?,
+                OpCode::ConvertInt64ToInt32 => self.handle_convert_int64_to_int32()?,
+                OpCode::ConvertInt64ToFloat32 => self.handle_convert_int64_to_float32()?,
+                OpCode::ConvertInt64ToFloat64 => self.handle_convert_int64_to_float64()?,
+                OpCode::ConvertFloat32ToInt32 => self.handle_convert_float32_to_int32()?,
+                OpCode::ConvertFloat32ToInt64 => self.handle_convert_float32_to_int64()?,
+                OpCode::ConvertFloat32ToFloat64 => self.handle_convert_float32_to_float64()?,
+                OpCode::ConvertFloat64ToInt32 => self.handle_convert_float64_to_int32()?,
+                OpCode::ConvertFloat64ToInt64 => self.handle_convert_float64_to_int64()?,
+                OpCode::ConvertFloat64ToFloat32 => self.handle_convert_float64_to_float32()?,
 
-                OpCode::NewArray8 => {
+                OpCode::LogicalAndOperation => self.handle_logical_and_operation()?,
+                OpCode::LogicalOrOperation => self.handle_logical_or_operation()?,
+                OpCode::LogicalNotOperation => self.handle_logical_not_operation()?,
+                OpCode::BooleanAndOperation => self.handle_boolean_and_operation()?,
+                OpCode::BooleanOrOperation => self.handle_boolean_or_operation()?,
+
+                OpCode::AddInt32 => self.handle_add_int32()?,
+                OpCode::AddInt64 => self.handle_add_int64()?,
+                OpCode::AddFloat32 => self.handle_add_float32()?,
+                OpCode::AddFloat64 => self.handle_add_float64()?,
+                OpCode::SubtractInt32 => self.handle_subtract_int32()?,
+                OpCode::SubtractInt64 => self.handle_subtract_int64()?,
+                OpCode::SubtractFloat32 => self.handle_subtract_float32()?,
+                OpCode::SubtractFloat64 => self.handle_subtract_float64()?,
+                OpCode::MultiplyInt32 => self.handle_multiply_int32()?,
+                OpCode::MultiplyInt64 => self.handle_multiply_int64()?,
+                OpCode::MultiplyFloat32 => self.handle_multiply_float32()?,
+                OpCode::MultiplyFloat64 => self.handle_multiply_float64()?,
+                OpCode::DivideInt32 => self.handle_divide_int32()?,
+                OpCode::DivideInt64 => self.handle_divide_int64()?,
+                OpCode::DivideFloat32 => self.handle_divide_float32()?,
+                OpCode::DivideFloat64 => self.handle_divide_float64()?,
+                OpCode::ModuloInt32 => self.handle_modulo_int32()?,
+                OpCode::ModuloInt64 => self.handle_modulo_int64()?,
+                OpCode::NegateInt32 => self.handle_negate_int32()?,
+                OpCode::NegateInt64 => self.handle_negate_int64()?,
+                OpCode::NegateFloat32 => self.handle_negate_float32()?,
+                OpCode::NegateFloat64 => self.handle_negate_float64()?,
+                OpCode::IncrementInt32 => self.handle_increment_int32()?,
+                OpCode::DecrementInt32 => self.handle_decrement_int32()?,
+                OpCode::IncrementInt64 => self.handle_increment_int64()?,
+                OpCode::DecrementInt64 => self.handle_decrement_int64()?,
+                OpCode::AddInt32WithConstant => self.handle_add_int32_with_constant()?,
+                OpCode::AddInt64WithConstant => self.handle_add_int64_with_constant()?,
+                OpCode::MultiplyInt32WithConstant => self.handle_multiply_int32_with_constant()?,
+                OpCode::MultiplyInt64WithConstant => self.handle_multiply_int64_with_constant()?,
+                OpCode::FusedMultiplyAddFloat32 => self.handle_fused_multiply_add_float32()?,
+                OpCode::FusedMultiplyAddFloat64 => self.handle_fused_multiply_add_float64()?,
+                OpCode::AbsoluteInt32 => self.handle_absolute_int32()?,
+                OpCode::AbsoluteInt64 => self.handle_absolute_int64()?,
+                OpCode::AbsoluteFloat32 => self.handle_absolute_float32()?,
+                OpCode::AbsoluteFloat64 => self.handle_absolute_float64()?,
+                OpCode::FloorFloat32 => self.handle_floor_float32()?,
+                OpCode::CeilFloat32 => self.handle_ceil_float32()?,
+                OpCode::RoundFloat32 => self.handle_round_float32()?,
+                OpCode::TruncateFloat32 => self.handle_truncate_float32()?,
+                OpCode::SquareRootFloat32 => self.handle_square_root_float32()?,
+                OpCode::SquareRootFloat64 => self.handle_square_root_float64()?,
+
+                OpCode::BitwiseAndInt32 => self.handle_bitwise_and_int32()?,
+                OpCode::BitwiseOrInt32 => self.handle_bitwise_or_int32()?,
+                OpCode::BitwiseXorInt32 => self.handle_bitwise_xor_int32()?,
+                OpCode::BitwiseNotInt32 => self.handle_bitwise_not_int32()?,
+                OpCode::BitwiseAndInt64 => self.handle_bitwise_and_int64()?,
+                OpCode::BitwiseOrInt64 => self.handle_bitwise_or_int64()?,
+                OpCode::BitwiseXorInt64 => self.handle_bitwise_xor_int64()?,
+                OpCode::BitwiseNotInt64 => self.handle_bitwise_not_int64()?,
+                OpCode::LeftShiftInt32 => self.handle_left_shift_int32()?,
+                OpCode::LeftShiftInt64 => self.handle_left_shift_int64()?,
+                OpCode::RightShiftInt32 => self.handle_right_shift_int32()?,
+                OpCode::RightShiftInt64 => self.handle_right_shift_int64()?,
+                OpCode::UnsignedRightShiftInt32 => self.handle_unsigned_right_shift_int32()?,
+                OpCode::UnsignedRightShiftInt64 => self.handle_unsigned_right_shift_int64()?,
+                OpCode::RotateLeftInt32 => self.handle_rotate_left_int32()?,
+                OpCode::RotateRightInt32 => self.handle_rotate_right_int32()?,
+
+                OpCode::CreateNewArray8 => {
                     let num_elements = self.read_byte()? as usize;
-                    self.handle_new_array(num_elements)?
+                    self.handle_create_new_array(num_elements)?
                 }
-                OpCode::NewArray16 => {
+                OpCode::CreateNewArray16 => {
                     let num_elements = self.read_u16()? as usize;
-                    self.handle_new_array(num_elements)?
+                    self.handle_create_new_array(num_elements)?
                 }
-                OpCode::GetIndex => self.handle_get_index()?,
-                OpCode::SetIndex => self.handle_set_index()?,
-                OpCode::NewMap8 => {
+                OpCode::GetArrayLength => self.handle_get_array_length()?,
+                OpCode::ResizeArray => self.handle_resize_array()?,
+                OpCode::GetArrayIndexInt32 => self.handle_get_array_index()?,
+                OpCode::SetArrayIndexInt32 => self.handle_set_array_index()?,
+                OpCode::GetArrayIndexFloat32 => self.handle_get_array_index_float32()?,
+                OpCode::SetArrayIndexFloat32 => self.handle_set_array_index_float32()?,
+                OpCode::GetArrayIndexFastInt32 => self.handle_get_array_index_fast_int32()?,
+                OpCode::SetArrayIndexFastInt32 => self.handle_set_array_index_fast_int32()?,
+                OpCode::CreateNewMap8 => {
                     let num_entries = self.read_byte()? as usize;
-                    self.handle_new_map(num_entries)?
+                    self.handle_create_new_map(num_entries)?
                 }
-                OpCode::NewMap16 => {
+                OpCode::CreateNewMap16 => {
                     let num_entries = self.read_u16()? as usize;
-                    self.handle_new_map(num_entries)?
+                    self.handle_create_new_map(num_entries)?
                 }
-                OpCode::GetField8 => {
+                OpCode::MapContainsKey => self.handle_map_contains_key()?,
+                OpCode::MapRemoveKey => self.handle_map_remove_key()?,
+                OpCode::MapGetOrDefaultValue => self.handle_map_get_or_default_value()?,
+                OpCode::GetObjectField8 => {
                     let name_index = self.read_byte()? as usize;
-                    self.handle_get_field(name_index)?
+                    self.handle_get_object_field(name_index)?
                 }
-                OpCode::GetField16 => {
+                OpCode::GetObjectField16 => {
                     let name_index = self.read_u16()? as usize;
-                    self.handle_get_field(name_index)?
+                    self.handle_get_object_field(name_index)?
                 }
-                OpCode::SetField8 => {
+                OpCode::SetObjectField8 => {
                     let name_index = self.read_byte()? as usize;
-                    self.handle_set_field(name_index)?
+                    self.handle_set_object_field(name_index)?
                 }
-                OpCode::SetField16 => {
+                OpCode::SetObjectField16 => {
                     let name_index = self.read_u16()? as usize;
-                    self.handle_set_field(name_index)?
+                    self.handle_set_object_field(name_index)?
                 }
+                OpCode::AllocateSlice => self.handle_allocate_slice()?,
 
-                OpCode::Throw => self.handle_throw()?,
-                OpCode::Try => self.handle_try()?,
-                OpCode::EndTry => self.handle_end_try()?,
+                OpCode::AtomicAddInt32 => self.handle_atomic_add_int32()?,
+                OpCode::AtomicSubtractInt32 => self.handle_atomic_subtract_int32()?,
+                OpCode::AtomicCompareAndSwapInt32 => self.handle_atomic_compare_and_swap_int32()?,
+                OpCode::EnterMonitor => self.handle_enter_monitor()?,
+                OpCode::ExitMonitor => self.handle_exit_monitor()?,
+                OpCode::YieldCurrentThread => self.handle_yield_current_thread()?,
 
-                OpCode::Print => self.handle_print()?,
+                OpCode::CallWithInlineCache => self.handle_call_with_inline_cache()?,
+                OpCode::CallWithInlineCacheInline => self.handle_call_with_inline_cache_inline()?,
+                OpCode::GetPropertyWithInlineCache => self.handle_get_property_with_inline_cache()?,
+                OpCode::GetPropertyWithInlineCacheInline => self.handle_get_property_with_inline_cache_inline()?,
+                OpCode::SetPropertyWithInlineCache => self.handle_set_property_with_inline_cache()?,
+                OpCode::LoadMethodInlineCache => self.handle_load_method_inline_cache()?,
+                OpCode::MegamorphicMethodCall => self.handle_megamorphic_method_call()?,
+
+                OpCode::PrintTopOfStack => self.handle_print_top_of_stack()?,
             }
         }
         Ok(())
