@@ -14,9 +14,9 @@ fn test_invoke_method() {
 
     let hello_world = chunk.add_constant(Value::Str("Hello World".to_string()));
 
-    chunk.write(OpCode::Constant8 as u8);
+    chunk.write(OpCode::PushConstant8 as u8);
     chunk.write(hello_world as u8);
-    chunk.write(OpCode::Print as u8);
+    chunk.write(OpCode::PrintTopOfStack as u8);
 
 
     let function = Rc::new(Function::new_bytecode(String::from("test_func"), 0, chunk.code, chunk.constants));

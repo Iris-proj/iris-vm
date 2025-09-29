@@ -8,10 +8,10 @@ fn test_class_instance_and_method_call() {
 
     // 2. Create the 'greet' method function that will be part of the class
     let greet_method_bytecode = vec![
-        OpCode::Constant8 as u8, 0, // Load the string "Hello from method!" from constants
-        OpCode::Dup as u8,         // Duplicate the value on the stack
-        OpCode::Print as u8,       // Print the duplicated value
-        OpCode::Return as u8,
+        OpCode::PushConstant8 as u8, 0, // Load the string "Hello from method!" from constants
+        OpCode::DuplicateTop as u8,         // Duplicate the value on the stack
+        OpCode::PrintTopOfStack as u8,       // Print the duplicated value
+        OpCode::ReturnFromFunction as u8,
     ];
     let greet_method_constants = vec![Value::Str("Hello from method!".to_string())];
     let greet_method_function = Rc::new(Function::new_bytecode(
@@ -32,10 +32,10 @@ fn test_class_instance_and_method_call() {
     // 5. The main script to be executed by the VM.
     // This script will find the class, create an instance, and call a method.
     let main_bytecode = vec![
-        OpCode::GetGlobal8 as u8, 0,   // Get "TestClass" from globals (constant at index 0)
-        OpCode::NewInstance as u8,     // Create an instance of the class
-        OpCode::Invoke8 as u8, 1, 0,   // Invoke method "greet" (constant at index 1) with 0 args
-        OpCode::Return as u8,
+        OpCode::GetGlobalVariable8 as u8, 0,   // Get "TestClass" from globals (constant at index 0)
+        OpCode::CreateNewInstance as u8,     // Create an instance of the class
+        OpCode::InvokeMethod8 as u8, 1, 0,   // Invoke method "greet" (constant at index 1) with 0 args
+        OpCode::ReturnFromFunction as u8,
     ];
     let main_constants = vec![
         Value::Str("TestClass".to_string()), // Constant 0: Name of the class to look up

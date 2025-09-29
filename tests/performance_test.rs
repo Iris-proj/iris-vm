@@ -65,25 +65,25 @@ fn get_or_create_fib_function() -> (Function, usize) {
 
     // If file doesn't exist or is invalid, create the function bytecode.
     let fib_bytecode = vec![
-        OpCode::GetLocal8 as u8, 0,       // Get n
-        OpCode::Constant8 as u8, 0,       // Push 2.0 (constant index 0)
-        OpCode::Less as u8,               // n < 2?
+        OpCode::GetLocalVariable8 as u8, 0,       // Get n
+        OpCode::PushConstant8 as u8, 0,       // Push 2.0 (constant index 0)
+        OpCode::LessThanInt32 as u8,               // n < 2?
         OpCode::JumpIfFalse as u8, 3,     // Jump to else part if not
-        OpCode::GetLocal8 as u8, 0,       // Get n
-        OpCode::Return as u8,             // Return n
+        OpCode::GetLocalVariable8 as u8, 0,       // Get n
+        OpCode::ReturnFromFunction as u8,             // Return n
         // else, return fib(n-1) + fib(n-2)
-        OpCode::GetGlobal8 as u8, FIB_GLOBAL_SLOT as u8, // Get fib function from global slot
-        OpCode::GetLocal8 as u8, 0,       // Get n
-        OpCode::Constant8 as u8, 1,       // Push 1.0 (constant index 1)
-        OpCode::Sub as u8,                // n - 1
-        OpCode::Call as u8, 1,            // Call fib(n-1)
-        OpCode::GetGlobal8 as u8, FIB_GLOBAL_SLOT as u8, // Get fib function from global slot
-        OpCode::GetLocal8 as u8, 0,       // Get n
-        OpCode::Constant8 as u8, 0,       // Push 2.0 (constant index 0)
-        OpCode::Sub as u8,                // n - 2
-        OpCode::Call as u8, 1,            // Call fib(n-2)
-        OpCode::Add as u8,                // Add the results
-        OpCode::Return as u8,
+        OpCode::GetGlobalVariable8 as u8, FIB_GLOBAL_SLOT as u8, // Get fib function from global slot
+        OpCode::GetLocalVariable8 as u8, 0,       // Get n
+        OpCode::PushConstant8 as u8, 1,       // Push 1.0 (constant index 1)
+        OpCode::SubtractInt32 as u8,                // n - 1
+        OpCode::CallFunction as u8, 1,            // Call fib(n-1)
+        OpCode::GetGlobalVariable8 as u8, FIB_GLOBAL_SLOT as u8, // Get fib function from global slot
+        OpCode::GetLocalVariable8 as u8, 0,       // Get n
+        OpCode::PushConstant8 as u8, 0,       // Push 2.0 (constant index 0)
+        OpCode::SubtractInt32 as u8,                // n - 2
+        OpCode::CallFunction as u8, 1,            // Call fib(n-2)
+        OpCode::AddInt32 as u8,                // Add the results
+        OpCode::ReturnFromFunction as u8,
     ];
 
     let s_func = SerializableFunction {
@@ -120,10 +120,10 @@ fn run_fib_test(n: i32) -> (Value, u128) {
 
     // Main script to call fib(n)
     let main_bytecode = vec![
-        OpCode::GetGlobal8 as u8, fib_global_slot as u8, // Get fib function from global slot
-        OpCode::Constant8 as u8, 0,     // Push argument n (constant index 0)
-        OpCode::Call as u8, 1,         // Call fib(n)
-        OpCode::Return as u8,
+        OpCode::GetGlobalVariable8 as u8, fib_global_slot as u8, // Get fib function from global slot
+        OpCode::PushConstant8 as u8, 0,     // Push argument n (constant index 0)
+        OpCode::CallFunction as u8, 1,         // Call fib(n)
+        OpCode::ReturnFromFunction as u8,
     ];
     let main_constants = vec![
         Value::F64(n as f64) // Constant index 0
