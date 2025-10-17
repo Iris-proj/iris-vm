@@ -1,0 +1,22 @@
+feat(jit): Implement Cranelift-based JIT compiler
+
+This commit introduces a JIT (Just-In-Time) compiler for the Iris VM, using the Cranelift code generation library. This is a major enhancement aimed at significantly improving the performance of the VM.
+
+Key changes:
+
+- **JIT Compiler Implementation:** A new `jit.rs` module contains the `IrisCompiler` struct, which is responsible for compiling `Function`s from bytecode to native machine code. It translates Iris opcodes into Cranelift IR, which is then compiled to native code.
+
+- **VM Integration:** The `IrisVM` has been updated to support JIT-compiled functions.
+    - The `Function` struct can now hold either bytecode or a pointer to a native function.
+    - A `switch_native` method allows a function to be dynamically switched from bytecode to its JIT-compiled version.
+    - Native function calls have been updated to pass a pointer to the `IrisVM` instance, allowing them to interact with the VM's state directly.
+
+- **New Opcodes:** The opcode set has been expanded to support a wider range of operations, including more numeric conversions and array/map manipulations, which are now implemented in the JIT.
+
+- **Testing:**
+    - New tests have been added in `dev_test.rs` to verify the correctness of the JIT compiler for various opcodes and to compare its performance against the interpreter.
+    - Old test files (`class_test.rs` and `performance_test.rs`) have been removed as they are superseded by the new tests.
+
+- **Refactoring:**
+    - The `IrisVM` and `CallFrame` structs have been refactored to better support the JIT.
+    - Global variable handling has been improved with new `get_global`, `set_global`, and `define_global` methods.
