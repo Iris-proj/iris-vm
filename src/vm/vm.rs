@@ -70,6 +70,7 @@ fn value_to_numeric(value: &Value) -> Option<Numeric> {
     }
 }
 
+#[repr(C)]
 pub struct IrisVM {
     pub stack: Vec<Value>,
     frames: Vec<CallFrame>,
@@ -83,6 +84,17 @@ struct CallFrame {
     stack_base: usize,
 }
 
+impl CallFrame {
+        #[allow(dead_code)]
+    pub fn new(function: Rc<Function>, stack_base: usize) -> Self {
+        CallFrame {
+            function,
+            ip: 0,
+            stack_base,
+        }
+    }
+}
+
 struct TryFrame {
     ip: usize,
     stack_size: usize,
@@ -92,11 +104,17 @@ impl IrisVM {
     pub fn new() -> Self {
         Self {
             stack: Vec::new(),
-            frames: Vec::new(),
+            frames: vec![], // Initial call frame will be pushed when a function is called
             globals: Vec::new(),
             try_frames: Vec::new(),
         }
     }
+
+    pub fn current_frame_stack_offset(&self) -> usize {
+        self.frames.last().map_or(0, |frame| frame.stack_base)
+    }
+
+    // ... rest of the impl IrisVM block ...
 
         pub fn push_frame(&mut self, function: Rc<Function>, arg_count: usize) -> Result<(), VMError> {
         let frame = CallFrame {
@@ -860,6 +878,7 @@ impl IrisVM {
         todo!()
     }
 
+        #[allow(dead_code)]
     fn handle_add_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
@@ -1022,6 +1041,7 @@ impl IrisVM {
         Ok(())
     }
 
+        #[allow(dead_code)]
     fn handle_less_than_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
@@ -1203,10 +1223,9 @@ impl IrisVM {
             Value::Function(func) => {
                 match func.kind {
                     crate::vm::function::FunctionKind::Native => {
-                        let args: Vec<Value> = self.stack.drain(self.stack.len() - arg_count..).collect();
-                        self.pop_stack()?;
-                        let result = (func.native.unwrap())(args);
-                        self.stack.push(result);
+                        // The native function now takes *mut IrisVM and returns ().
+                        // We need to pass the vm_ptr directly.
+                        (func.native.unwrap())(self as *mut IrisVM);
                     }
                     crate::vm::function::FunctionKind::Bytecode => {
                         self.stack.remove(callee_pos);
@@ -1233,10 +1252,9 @@ impl IrisVM {
                 if let Some(method) = instance_rc.get_method(&method_name) {
                     match method.kind {
                         crate::vm::function::FunctionKind::Native => {
-                            let args = self.stack.drain(self.stack.len() - arg_count..).collect();
-                            self.pop_stack()?;
-                            let result = (method.native.unwrap())(args);
-                            self.stack.push(result);
+                            // The native function now takes *mut IrisVM and returns ().
+                            // We need to pass the vm_ptr directly.
+                            (method.native.unwrap())(self as *mut IrisVM);
                         }
                                                 crate::vm::function::FunctionKind::Bytecode => {
                             self.push_frame(method, arg_count)?;
@@ -1504,11 +1522,23 @@ impl IrisVM {
         Ok(self.frames.is_empty())
     }
 
-    pub fn add_global(&mut self, slot: usize, value: Value) {
-        if slot >= self.globals.len() {
-            self.globals.resize(slot + 1, Value::Null);
+    pub fn get_global(&self, index: usize) -> Result<Value, VMError> {
+        self.globals.get(index).cloned().ok_or(VMError::UndefinedVariable(format!("Global variable at index {} not found", index)))
+    }
+
+    pub fn set_global(&mut self, index: usize, value: Value) -> Result<(), VMError> {
+        if index >= self.globals.len() {
+            return Err(VMError::UndefinedVariable(format!("Global variable at index {} not found for setting", index)));
         }
-        self.globals[slot] = value;
+        self.globals[index] = value;
+        Ok(())
+    }
+
+    pub fn define_global(&mut self, index: usize, value: Value) {
+        if index >= self.globals.len() {
+            self.globals.resize(index + 1, Value::Null);
+        }
+        self.globals[index] = value;
     }
 
     pub fn run(&mut self) -> Result<(), VMError> {
@@ -1702,10 +1732,17 @@ impl IrisVM {
                 OpCode::NotEqualFloat32 => self.handle_not_equal_float32()?,
                 OpCode::NotEqualFloat64 => self.handle_not_equal_float64()?,
                 OpCode::GreaterThanInt32 => self.handle_greater_than_int32()?,
+                OpCode::LessThanInt32 => {
+                    let b = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    let a = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    match (a, b) {
+                        (Value::I32(a_val), Value::I32(b_val)) => self.stack.push(Value::Bool(a_val < b_val)),
+                        _ => return Err(VMError::TypeMismatch("Operands for LessThanInt32 must be I32".to_string())),
+                    }
+                },
                 OpCode::GreaterThanInt64 => self.handle_greater_than_int64()?,
                 OpCode::GreaterThanFloat32 => self.handle_greater_than_float32()?,
                 OpCode::GreaterThanFloat64 => self.handle_greater_than_float64()?,
-                OpCode::LessThanInt32 => self.handle_less_than_int32()?,
                 OpCode::LessThanInt64 => self.handle_less_than_int64()?,
                 OpCode::LessThanFloat32 => self.handle_less_than_float32()?,
                 OpCode::LessThanFloat64 => self.handle_less_than_float64()?,
@@ -1757,7 +1794,14 @@ impl IrisVM {
                 OpCode::BooleanAndOperation => self.handle_boolean_and_operation()?,
                 OpCode::BooleanOrOperation => self.handle_boolean_or_operation()?,
 
-                OpCode::AddInt32 => self.handle_add_int32()?,
+                OpCode::AddInt32 => {
+                    let b = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    let a = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    match (a, b) {
+                        (Value::I32(a_val), Value::I32(b_val)) => self.stack.push(Value::I32(a_val + b_val)),
+                        _ => return Err(VMError::TypeMismatch("Operands for AddInt32 must be I32".to_string())),
+                    }
+                },
                 OpCode::AddInt64 => self.handle_add_int64()?,
                 OpCode::AddFloat32 => self.handle_add_float32()?,
                 OpCode::AddFloat64 => self.handle_add_float64()?,
