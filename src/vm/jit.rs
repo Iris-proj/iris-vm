@@ -261,7 +261,7 @@ extern "C" fn jit_pick_stack_item(vm_ptr: *mut IrisVM, index: u8) {
     unsafe {
         let len = (*vm_ptr).stack.len();
         if (index as usize) >= len { panic!("Stack underflow for PickStackItem"); }
-        let value = (*vm_ptr).stack[len - 1 - (index as usize)].clone();
+        let value = (&(*vm_ptr).stack)[len - 1 - (index as usize)].clone();
         (*vm_ptr).stack.push(value);
     }
 }
@@ -270,16 +270,18 @@ extern "C" fn jit_pick_stack_item(vm_ptr: *mut IrisVM, index: u8) {
 extern "C" fn jit_roll_stack_items(vm_ptr: *mut IrisVM, count: u8) {
     unsafe {
         let len = (*vm_ptr).stack.len();
-        if (count as usize) >= len { panic!("Stack underflow for RollStackItems"); }
+        if (count as usize) >= len {
+            panic!("Stack underflow for RollStackItems");
+        }
         let mut temp_stack: Vec<Value> = Vec::new();
         for _ in 0..count {
             temp_stack.push((*vm_ptr).stack.pop().unwrap());
         }
-        let top = (*vm_ptr).stack.pop().unwrap();
-        (*vm_ptr).stack.push(top);
+        let item_to_move = (*vm_ptr).stack.pop().unwrap();
         while let Some(val) = temp_stack.pop() {
             (*vm_ptr).stack.push(val);
         }
+        (*vm_ptr).stack.push(item_to_move);
     }
 }
 
@@ -288,7 +290,7 @@ extern "C" fn jit_peek_stack(vm_ptr: *mut IrisVM, index: u8) {
     unsafe {
         let len = (*vm_ptr).stack.len();
         if (index as usize) >= len { panic!("Stack underflow for PeekStack"); }
-        let value = (*vm_ptr).stack[len - 1 - (index as usize)].clone();
+        let value = (&(*vm_ptr).stack)[len - 1 - (index as usize)].clone();
         (*vm_ptr).stack.push(value);
     }
 }
@@ -311,7 +313,7 @@ extern "C" fn jit_duplicate_multiple(vm_ptr: *mut IrisVM, count: u8) {
         if (count as usize) > len { panic!("Stack underflow for DuplicateMultiple"); }
         let mut temp_vec: Vec<Value> = Vec::new();
         for i in 0..count {
-            temp_vec.push((*vm_ptr).stack[len - (count as usize) + (i as usize)].clone());
+            temp_vec.push((&(*vm_ptr).stack)[len - (count as usize) + (i as usize)].clone());
         }
         for val in temp_vec {
             (*vm_ptr).stack.push(val);
@@ -361,7 +363,7 @@ extern "C" fn jit_swap_multiple(vm_ptr: *mut IrisVM, count: u8) {
 extern "C" fn jit_get_local_variable(vm_ptr: *mut IrisVM, index: u8) {
     unsafe {
         let frame_offset = (*vm_ptr).current_frame_stack_offset();
-        let value = (*vm_ptr).stack[frame_offset + index as usize].clone();
+        let value = (&(*vm_ptr).stack)[frame_offset + index as usize].clone();
         (*vm_ptr).stack.push(value);
     }
 }
@@ -371,7 +373,7 @@ extern "C" fn jit_set_local_variable(vm_ptr: *mut IrisVM, index: u8) {
     unsafe {
         let value = (*vm_ptr).stack.pop().expect("Stack underflow for SetLocalVariable");
         let frame_offset = (*vm_ptr).current_frame_stack_offset();
-        (*vm_ptr).stack[frame_offset + index as usize] = value;
+        (&mut (*vm_ptr).stack)[frame_offset + index as usize] = value;
     }
 }
 
@@ -379,7 +381,7 @@ extern "C" fn jit_set_local_variable(vm_ptr: *mut IrisVM, index: u8) {
 extern "C" fn jit_get_local_variable16(vm_ptr: *mut IrisVM, index: u16) {
     unsafe {
         let frame_offset = (*vm_ptr).current_frame_stack_offset();
-        let value = (*vm_ptr).stack[frame_offset + index as usize].clone();
+        let value = (&(*vm_ptr).stack)[frame_offset + index as usize].clone();
         (*vm_ptr).stack.push(value);
     }
 }
@@ -389,7 +391,7 @@ extern "C" fn jit_set_local_variable16(vm_ptr: *mut IrisVM, index: u16) {
     unsafe {
         let value = (*vm_ptr).stack.pop().expect("Stack underflow for SetLocalVariable16");
         let frame_offset = (*vm_ptr).current_frame_stack_offset();
-        (*vm_ptr).stack[frame_offset + index as usize] = value;
+        (&mut (*vm_ptr).stack)[frame_offset + index as usize] = value;
     }
 }
 
