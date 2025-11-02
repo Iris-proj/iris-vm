@@ -59,3 +59,10 @@ impl ChunkWriter<u16> for Chunk {
     }
 }
 
+impl ChunkWriter<i32> for Chunk {
+    fn write(&mut self, value: i32) {
+        for b in value.to_be_bytes() {
+            self.code.push(b);
+        }
+    }
+}

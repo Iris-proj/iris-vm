@@ -6,7 +6,6 @@ use iris_vm::vm::{
     vm::IrisVM,
 };
 use iris_vm::vm::chunk::Chunk;
-use iris_vm::vm::jit::IrisCompiler;
 use iris_vm::vm::opcode::OpCode;
 
 #[test]
@@ -15,13 +14,13 @@ fn test_invoke_method() {
 
     let hello_world = chunk.add_constant(Value::Str("Hello World".to_string()));
 
-    chunk.write(OpCode::PushConstant8 as u8);
-    chunk.write(hello_world as u8);
-    chunk.write(OpCode::PrintTopOfStack as u8);
+    chunk.write(OpCode::PushConstant8);
+    chunk.write(hello_world);
+    chunk.write(OpCode::PrintTopOfStack);
 
 
     let mut vm = IrisVM::new();
-    let function = Rc::new(Function::new_bytecode(String::from("test_func"), 0, chunk.code, chunk.constants, &mut vm));
+    let function = Rc::new(Function::new_bytecode(String::from("test_func"), 0, chunk.code, chunk.constants));
         let _ = vm.push_frame(function, 0);
     let _ = vm.run();
 }

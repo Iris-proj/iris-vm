@@ -4,4 +4,3 @@ pub mod value;
 pub mod function;
 pub mod object;
 pub mod vm;
-pub mod jit;

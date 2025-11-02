@@ -21,6 +21,7 @@ pub enum VMError {
     NoTryFrame,
 }
 
+
 impl fmt::Display for VMError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -46,29 +47,7 @@ impl fmt::Display for VMError {
 
 impl Error for VMError {}
 
-#[derive(Debug, Clone, Copy)]
-enum Numeric {
-    Int(i64),
-    Float(f64),
-}
 
-fn value_to_numeric(value: &Value) -> Option<Numeric> {
-    match value {
-        Value::I8(v) => Some(Numeric::Int(*v as i64)),
-        Value::I16(v) => Some(Numeric::Int(*v as i64)),
-        Value::I32(v) => Some(Numeric::Int(*v as i64)),
-        Value::I64(v) => Some(Numeric::Int(*v)),
-        Value::U8(v) => Some(Numeric::Int(*v as i64)),
-        Value::U16(v) => Some(Numeric::Int(*v as i64)),
-        Value::U32(v) => Some(Numeric::Int(*v as i64)),
-        Value::U64(v) => Some(Numeric::Int(*v as i64)),
-        Value::I128(v) => Some(Numeric::Int(*v as i64)),
-        Value::U128(v) => Some(Numeric::Int(*v as i64)),
-        Value::F32(v) => Some(Numeric::Float(*v as f64)),
-        Value::F64(v) => Some(Numeric::Float(*v)),
-        _ => None,
-    }
-}
 
 #[repr(C)]
 pub struct IrisVM {
@@ -98,6 +77,12 @@ impl CallFrame {
 struct TryFrame {
     ip: usize,
     stack_size: usize,
+}
+
+impl Default for IrisVM {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl IrisVM {
@@ -310,12 +295,44 @@ impl IrisVM {
         todo!()
     }
 
+    fn is_instance_of(&self, instance: &Instance, target_class: &Rc<Class>) -> bool {
+        let mut current_class = Some(instance.class.clone());
+        while let Some(cls) = current_class {
+            if Rc::ptr_eq(&cls, target_class) {
+                return true;
+            }
+            current_class = cls.superclass.clone();
+        }
+        false
+    }
+
     fn handle_check_cast_object(&mut self) -> Result<(), VMError> {
-        todo!()
+        let class_val = self.pop_stack()?;
+        let obj_val = self.peek_stack(0)?;
+
+        if let (Value::Class(target_class), Value::Object(instance)) = (&class_val, obj_val) {
+            if self.is_instance_of(instance, target_class) {
+                Ok(())
+            } else {
+                Err(VMError::TypeMismatch(format!("Object of type {} cannot be cast to type {}", instance.class.name, target_class.name)))
+            }
+        } else {
+            Err(VMError::TypeMismatch("CheckCastObject requires a Class and an Object on the stack".to_string()))
+        }
     }
 
     fn handle_instance_of_check(&mut self) -> Result<(), VMError> {
-        todo!()
+        let class_val = self.pop_stack()?;
+        let obj_val = self.pop_stack()?;
+
+        if let (Value::Class(target_class), Value::Object(instance)) = (class_val, obj_val) {
+            let found = self.is_instance_of(&instance, &target_class);
+            self.stack.push(Value::Bool(found));
+            Ok(())
+        } else {
+            self.stack.push(Value::Bool(false)); // `instanceof` on non-objects is false
+            Ok(())
+        }
     }
 
     fn handle_load_method_handle(&mut self) -> Result<(), VMError> {
@@ -343,19 +360,40 @@ impl IrisVM {
     }
 
     fn handle_short_jump(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_byte()? as i8;
+        let frame = self.current_frame_mut()?;
+        frame.ip = (frame.ip as isize + offset as isize) as usize;
+        Ok(())
     }
 
     fn handle_jump_if_true(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let condition = self.pop_stack()?;
+        if condition.is_truthy() {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_jump_if_null(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let value = self.pop_stack()?;
+        if matches!(value, Value::Null) {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_jump_if_non_null(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let value = self.pop_stack()?;
+        if !matches!(value, Value::Null) {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_loop_start_marker(&mut self) -> Result<(), VMError> {
@@ -367,23 +405,145 @@ impl IrisVM {
     }
 
     fn handle_tail_call_function(&mut self) -> Result<(), VMError> {
-        todo!()
+        let arg_count = self.read_byte()? as usize;
+        let callee_pos = self.stack.len() - 1 - arg_count;
+
+        if let Value::Function(func) = self.stack[callee_pos].clone() {
+            if func.kind == crate::vm::function::FunctionKind::Native {
+                return Err(VMError::InvalidOperand("Cannot tail call a native function.".to_string()));
+            }
+
+            let stack_base = self.current_frame()?.stack_base;
+
+            // Move arguments from the top of the stack down to the base of the current frame.
+            let args_start_idx = callee_pos + 1;
+            for i in 0..arg_count {
+                self.stack[stack_base + i] = self.stack[args_start_idx + i].clone();
+            }
+            
+            // Truncate the stack to the new size.
+            self.stack.truncate(stack_base + arg_count);
+
+            // Replace the current frame's function and reset IP.
+            let frame = self.current_frame_mut()?;
+            frame.function = func;
+            frame.ip = 0;
+
+            Ok(())
+        } else {
+            Err(VMError::NonCallableValue)
+        }
     }
 
     fn handle_table_switch(&mut self) -> Result<(), VMError> {
-        todo!()
+        let opcode_ip = self.current_frame()?.ip - 1;
+        let default_offset = self.read_u16()? as isize;
+        let low = self.read_i32()?;
+        let high = self.read_i32()?;
+        
+        if low > high {
+            return Err(VMError::InvalidOperand("TableSwitch low value cannot be greater than high value.".to_string()));
+        }
+        let num_offsets = (high - low + 1) as usize;
+
+        let mut jump_offsets = Vec::with_capacity(num_offsets);
+        for _ in 0..num_offsets {
+            jump_offsets.push(self.read_u16()? as isize);
+        }
+
+        let value = self.pop_stack()?;
+        
+        let final_offset = if let Value::I32(val) = value {
+            if val >= low && val <= high {
+                jump_offsets[(val - low) as usize]
+            } else {
+                default_offset
+            }
+        } else {
+            default_offset
+        };
+
+        self.current_frame_mut()?.ip = (opcode_ip as isize + final_offset) as usize;
+        Ok(())
     }
 
     fn handle_lookup_switch(&mut self) -> Result<(), VMError> {
-        todo!()
+        let opcode_ip = self.current_frame()?.ip - 1;
+        let default_offset = self.read_u16()? as isize;
+        let num_pairs = self.read_u16()? as usize;
+
+        let mut pairs = Vec::with_capacity(num_pairs);
+        for _ in 0..num_pairs {
+            let key = self.read_i32()?;
+            let offset = self.read_u16()? as isize;
+            pairs.push((key, offset));
+        }
+
+        let value = self.pop_stack()?;
+
+        let final_offset = if let Value::I32(val) = value {
+            // Assuming pairs are sorted by key for binary search.
+            // If not, a linear search would be required.
+            pairs.binary_search_by_key(&val, |&(k, _)| k)
+                .map(|index| pairs[index].1)
+                .unwrap_or(default_offset)
+        } else {
+            default_offset
+        };
+
+        self.current_frame_mut()?.ip = (opcode_ip as isize + final_offset) as usize;
+        Ok(())
     }
 
     fn handle_range_switch(&mut self) -> Result<(), VMError> {
-        todo!()
+        let opcode_ip = self.current_frame()?.ip - 1;
+        let default_offset = self.read_u16()? as isize;
+        let num_ranges = self.read_u16()? as usize;
+
+        let mut ranges = Vec::with_capacity(num_ranges);
+        for _ in 0..num_ranges {
+            let start = self.read_i32()?;
+            let end = self.read_i32()?;
+            let offset = self.read_u16()? as isize;
+            ranges.push((start, end, offset));
+        }
+
+        let value = self.pop_stack()?;
+
+        let final_offset = if let Value::I32(val) = value {
+            ranges.iter()
+                .find(|&&(start, end, _)| val >= start && val <= end)
+                .map(|item| item.2)
+                .unwrap_or(default_offset)
+        } else {
+            default_offset
+        };
+
+        self.current_frame_mut()?.ip = (opcode_ip as isize + final_offset) as usize;
+        Ok(())
     }
 
     fn handle_catch_exception(&mut self) -> Result<(), VMError> {
-        todo!()
+        let class_index = self.read_u16()? as usize;
+        let catch_class_val = self.current_frame()?.function.constants().get(class_index)
+            .ok_or(VMError::InvalidOperand("Catch class constant not found".to_string()))?.clone();
+
+        let exception_obj = self.peek_stack(0)?;
+
+        if let (Value::Class(catch_class), Value::Object(exc_instance)) = (catch_class_val, exception_obj) {
+            if self.is_instance_of(exc_instance, &catch_class) {
+                // It's a match. The exception is handled.
+                // The exception object remains on the stack for the catch block to use.
+                Ok(())
+            } else {
+                // Not a match, continue unwinding.
+                self.handle_throw_exception()
+            }
+        } else {
+            // This case should ideally not be reached if the thrown value is always an object.
+            // If it's not the right type, we can't handle it, so continue unwinding.
+            self.handle_throw_exception()
+        }
     }
 
     fn handle_finally_block(&mut self) -> Result<(), VMError> {
@@ -395,435 +555,1171 @@ impl IrisVM {
     }
 
     fn handle_boolean_and_operation(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::Bool(a_val), Value::Bool(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val && b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for BooleanAnd must be Booleans".to_string()))
+        }
     }
 
     fn handle_boolean_or_operation(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::Bool(a_val), Value::Bool(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val || b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for BooleanOr must be Booleans".to_string()))
+        }
     }
 
     fn handle_bitwise_and_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val & b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for BitwiseAndInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_bitwise_or_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val | b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for BitwiseOrInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_bitwise_xor_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val ^ b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for BitwiseXorInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_bitwise_not_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(!x));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for BitwiseNotInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_left_shift_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I64(val), Value::I64(s)) = (value, shift) {
+            self.stack.push(Value::I64(val.wrapping_shl(s as u32)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LeftShiftInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_right_shift_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I64(val), Value::I64(s)) = (value, shift) {
+            self.stack.push(Value::I64(val.wrapping_shr(s as u32)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for RightShiftInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_unsigned_right_shift_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I32(val), Value::I32(s)) = (value, shift) {
+            self.stack.push(Value::I32((val as u32).wrapping_shr(s as u32) as i32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for UnsignedRightShiftInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_unsigned_right_shift_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I64(val), Value::I64(s)) = (value, shift) {
+            self.stack.push(Value::I64((val as u64).wrapping_shr(s as u32) as i64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for UnsignedRightShiftInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_rotate_left_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I32(val), Value::I32(s)) = (value, shift) {
+            self.stack.push(Value::I32(val.rotate_left(s as u32)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for RotateLeftInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_rotate_right_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let shift = self.pop_stack()?;
+        let value = self.pop_stack()?;
+        if let (Value::I32(val), Value::I32(s)) = (value, shift) {
+            self.stack.push(Value::I32(val.rotate_right(s as u32)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for RotateRightInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_add_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_add(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for AddInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_add_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val + b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for AddFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_add_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val + b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for AddFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_subtract_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_sub(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for SubtractInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_subtract_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val - b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for SubtractFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_subtract_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val - b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for SubtractFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_multiply_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_mul(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MultiplyInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_multiply_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val * b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MultiplyFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_multiply_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val * b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MultiplyFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_divide_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(VMError::DivisionByZero);
+            }
+            self.stack.push(Value::I64(a_val / b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for DivideInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_divide_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val / b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for DivideFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_divide_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val / b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for DivideFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_modulo_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(VMError::DivisionByZero);
+            }
+            self.stack.push(Value::I64(a_val % b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for ModuloInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_negate_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(-x));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for NegateInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_negate_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(-x));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for NegateFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_negate_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::F64(-x));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for NegateFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_increment_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(x.wrapping_add(1)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for IncrementInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_decrement_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(x.wrapping_sub(1)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for DecrementInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_increment_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(x.wrapping_add(1)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for IncrementInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_decrement_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(x.wrapping_sub(1)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for DecrementInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_add_int32_with_constant(&mut self) -> Result<(), VMError> {
-        todo!()
+        let constant = self.read_i8()? as i32;
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(x.wrapping_add(constant)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AddInt32WithConstant must be I32".to_string()))
+        }
     }
 
     fn handle_add_int64_with_constant(&mut self) -> Result<(), VMError> {
-        todo!()
+        let constant = self.read_i8()? as i64;
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(x.wrapping_add(constant)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AddInt64WithConstant must be I64".to_string()))
+        }
     }
 
     fn handle_multiply_int32_with_constant(&mut self) -> Result<(), VMError> {
-        todo!()
+        let constant = self.read_i8()? as i32;
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(x.wrapping_mul(constant)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for MultiplyInt32WithConstant must be I32".to_string()))
+        }
     }
 
     fn handle_multiply_int64_with_constant(&mut self) -> Result<(), VMError> {
-        todo!()
+        let constant = self.read_i8()? as i64;
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(x.wrapping_mul(constant)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for MultiplyInt64WithConstant must be I64".to_string()))
+        }
     }
 
     fn handle_fused_multiply_add_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val), Value::F32(c_val)) = (a, b, c) {
+            self.stack.push(Value::F32(a_val.mul_add(b_val, c_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for FusedMultiplyAddFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_fused_multiply_add_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val), Value::F64(c_val)) = (a, b, c) {
+            self.stack.push(Value::F64(a_val.mul_add(b_val, c_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for FusedMultiplyAddFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_absolute_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(x.abs()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AbsoluteInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_absolute_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I64(x.abs()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AbsoluteInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_absolute_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.abs()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AbsoluteFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_absolute_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::F64(x.abs()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for AbsoluteFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_floor_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.floor()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for FloorFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_ceil_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.ceil()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for CeilFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_round_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.round()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for RoundFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_truncate_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.trunc()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for TruncateFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_square_root_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F32(x.sqrt()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for SquareRootFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_square_root_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::F64(x.sqrt()));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for SquareRootFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_equal_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for EqualInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_equal_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for EqualFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_equal_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for EqualFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_not_equal_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for NotEqualInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_not_equal_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for NotEqualFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_not_equal_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for NotEqualFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_greater_than_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterThanInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_greater_than_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterThanFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_greater_than_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterThanFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_less_than_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessThanInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_less_than_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessThanFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_less_than_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessThanFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_less_or_equal_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualInt64 must be I64".to_string()))
+        }
     }
 
     fn handle_less_or_equal_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualFloat32 must be F32".to_string()))
+        }
     }
 
     fn handle_less_or_equal_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualFloat64 must be F64".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_equal_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val == b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for CompareAndBranchEqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_not_equal_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val != b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for CompareAndBranchNotEqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_less_than_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val < b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for CompareAndBranchLessThanInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_greater_than_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val > b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for CompareAndBranchGreaterThanInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_greater_unsigned8(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterUnsigned8 must be U8".to_string()))
+        }
     }
 
     fn handle_greater_unsigned16(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterUnsigned16 must be U16".to_string()))
+        }
     }
 
     fn handle_greater_unsigned32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterUnsigned32 must be U32".to_string()))
+        }
     }
 
     fn handle_greater_unsigned64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterUnsigned64 must be U64".to_string()))
+        }
     }
 
     fn handle_less_unsigned8(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessUnsigned8 must be U8".to_string()))
+        }
     }
 
     fn handle_less_unsigned16(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessUnsigned16 must be U16".to_string()))
+        }
     }
 
     fn handle_less_unsigned32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessUnsigned32 must be U32".to_string()))
+        }
     }
 
     fn handle_less_unsigned64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessUnsigned64 must be U64".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned8(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualUnsigned8 must be U8".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned16(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualUnsigned16 must be U16".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualUnsigned32 must be U32".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualUnsigned64 must be U64".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned8(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualUnsigned8 must be U8".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned16(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualUnsigned16 must be U16".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualUnsigned32 must be U32".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualUnsigned64 must be U64".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I64(x as i64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt32ToInt64 must be I32".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::F32(x as f32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt32ToFloat32 must be I32".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(x) = val {
+            self.stack.push(Value::F64(x as f64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt32ToFloat64 must be I32".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::I32(x as i32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt64ToInt32 must be I64".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::F32(x as f32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt64ToFloat32 must be I64".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(x) = val {
+            self.stack.push(Value::F64(x as f64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertInt64ToFloat64 must be I64".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::I32(x as i32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat32ToInt32 must be F32".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::I64(x as i64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat32ToInt64 must be F32".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_float64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(x) = val {
+            self.stack.push(Value::F64(x as f64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat32ToFloat64 must be F32".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::I32(x as i32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat64ToInt32 must be F64".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_int64(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::I64(x as i64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat64ToInt64 must be F64".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(x) = val {
+            self.stack.push(Value::F32(x as f32));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for ConvertFloat64ToFloat32 must be F64".to_string()))
+        }
     }
 
     fn handle_get_array_length(&mut self) -> Result<(), VMError> {
-        todo!()
+        let array_val = self.pop_stack()?;
+        if let Value::Array(arr) = array_val {
+            let len = arr.borrow().len();
+            self.stack.push(Value::I64(len as i64));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for GetArrayLength must be an Array".to_string()))
+        }
     }
 
     fn handle_resize_array(&mut self) -> Result<(), VMError> {
-        todo!()
+        let new_size_val = self.pop_stack()?;
+        let array_val = self.pop_stack()?;
+        if let (Value::Array(arr), Value::I64(new_size)) = (array_val, new_size_val) {
+            arr.borrow_mut().resize(new_size as usize, Value::Null);
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for ResizeArray must be an Array and an I64".to_string()))
+        }
     }
 
     fn handle_get_array_index_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        // This is likely an optimization for float arrays, but current Array is generic Value.
+        // We will treat it like a generic GetIndex for now.
+        self.handle_get_array_index()
     }
 
     fn handle_set_array_index_float32(&mut self) -> Result<(), VMError> {
-        todo!()
+        // This is likely an optimization for float arrays, but current Array is generic Value.
+        // We will treat it like a generic SetIndex for now.
+        self.handle_set_array_index()
     }
 
     fn handle_get_array_index_fast_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        // This is likely an optimization (e.g. no bounds check), but for safety we'll use the standard one.
+        self.handle_get_array_index()
     }
 
     fn handle_set_array_index_fast_int32(&mut self) -> Result<(), VMError> {
-        todo!()
+        // This is likely an optimization (e.g. no bounds check), but for safety we'll use the standard one.
+        self.handle_set_array_index()
     }
 
     fn handle_map_contains_key(&mut self) -> Result<(), VMError> {
-        todo!()
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::String(key)) = (map_val, key_val) {
+            let result = map.borrow().contains_key(&key);
+            self.stack.push(Value::Bool(result));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MapContainsKey must be a Map and a String key".to_string()))
+        }
     }
 
     fn handle_map_remove_key(&mut self) -> Result<(), VMError> {
-        todo!()
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::String(key)) = (map_val, key_val) {
+            let removed_val = map.borrow_mut().remove(&key).unwrap_or(Value::Null);
+            self.stack.push(removed_val);
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MapRemoveKey must be a Map and a String key".to_string()))
+        }
     }
 
     fn handle_map_get_or_default_value(&mut self) -> Result<(), VMError> {
-        todo!()
+        let default_val = self.pop_stack()?;
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::String(key)) = (map_val, key_val) {
+            let value = map.borrow().get(&key).cloned().unwrap_or(default_val);
+            self.stack.push(value);
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MapGetOrDefaultValue must be a Map and a String key".to_string()))
+        }
     }
 
     fn handle_allocate_slice(&mut self) -> Result<(), VMError> {
-        todo!()
+        let end_val = self.pop_stack()?;
+        let start_val = self.pop_stack()?;
+        let array_val = self.pop_stack()?;
+        if let (Value::Array(arr), Value::I64(start), Value::I64(end)) = (array_val, start_val, end_val) {
+            let start_idx = start as usize;
+            let end_idx = end as usize;
+            let borrowed_arr = arr.borrow();
+            if start_idx > end_idx || end_idx > borrowed_arr.len() {
+                return Err(VMError::IndexOutOfBounds);
+            }
+            let slice = borrowed_arr[start_idx..end_idx].to_vec();
+            self.stack.push(Value::Array(Rc::new(RefCell::new(slice))));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for AllocateSlice must be an Array and two I64 indices".to_string()))
+        }
     }
 
     fn handle_atomic_add_int32(&mut self) -> Result<(), VMError> {
@@ -878,225 +1774,141 @@ impl IrisVM {
         todo!()
     }
 
-        #[allow(dead_code)]
     fn handle_add_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-
-        // Handle string concatenation separately
-        if let (Value::Str(s1), Value::Str(s2)) = (&a, &b) {
-            let mut new_s = s1.clone();
-            new_s.push_str(s2);
-            self.stack.push(Value::Str(new_s));
-            return Ok(());
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.wrapping_add(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for AddInt32 must be I32".to_string()))
         }
-
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for addition.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for addition.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_add(val_b)),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a + val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a + val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 + val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
     }
 
     fn handle_subtract_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for subtraction.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for subtraction.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_sub(val_b)),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a - val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a - val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 - val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.wrapping_sub(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for SubtractInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_multiply_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for multiplication.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for multiplication.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::I64(val_a.wrapping_mul(val_b)),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a * val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a * val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 * val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.wrapping_mul(b_val)));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for MultiplyInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_divide_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for division.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for division.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => {
-                if val_b == 0 {
-                    return Err(VMError::DivisionByZero);
-                }
-                Value::I64(val_a / val_b)
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(VMError::DivisionByZero);
             }
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::F64(val_a / val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::F64(val_a / val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::F64(val_a as f64 / val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+            self.stack.push(Value::I32(a_val / b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for DivideInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_modulo_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for modulo.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for modulo.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => {
-                if val_b == 0 {
-                    return Err(VMError::DivisionByZero);
-                }
-                Value::I64(val_a % val_b)
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(VMError::DivisionByZero);
             }
-            (Numeric::Float(_), Numeric::Float(_)) => return Err(VMError::TypeMismatch("Modulo cannot be applied to floats.".to_string())),
-            _ => return Err(VMError::TypeMismatch("Modulo requires integer operands.".to_string())),
-        };
-
-        self.stack.push(result);
-        Ok(())
+            self.stack.push(Value::I32(a_val % b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for ModuloInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_negate_int32(&mut self) -> Result<(), VMError> {
         let val = self.pop_stack()?;
-        let result = match val {
-            Value::I8(x) => Value::I8(-x),
-            Value::I16(x) => Value::I16(-x),
-            Value::I32(x) => Value::I32(-x),
-            Value::I64(x) => Value::I64(-x),
-            Value::I128(x) => Value::I128(-x),
-            Value::F32(x) => Value::F32(-x),
-            Value::F64(x) => Value::F64(-x),
-            _ => return Err(VMError::TypeMismatch("Negate operation on non-numeric type".to_string())),
-        };
-        self.stack.push(result);
-        Ok(())
+        if let Value::I32(x) = val {
+            self.stack.push(Value::I32(-x));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operand for NegateInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        self.stack.push(Value::Bool(a == b));
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for EqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_not_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        self.stack.push(Value::Bool(a != b));
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for NotEqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_greater_than_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a > val_b),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a > val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a > val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool((val_a as f64) > val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterThanInt32 must be I32".to_string()))
+        }
     }
 
-        #[allow(dead_code)]
     fn handle_less_than_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a < val_b),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a < val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a < val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool((val_a as f64) < val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessThanInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a >= val_b),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a >= val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a >= val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool(val_a as f64 >= val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for GreaterOrEqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_less_or_equal_int32(&mut self) -> Result<(), VMError> {
         let b = self.pop_stack()?;
         let a = self.pop_stack()?;
-        let num_a = value_to_numeric(&a)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'a' must be numeric for comparison.".to_string()))?;
-        let num_b = value_to_numeric(&b)
-            .ok_or_else(|| VMError::TypeMismatch("Operand 'b' must be numeric for comparison.".to_string()))?;
-
-        let result = match (num_a, num_b) {
-            (Numeric::Int(val_a), Numeric::Int(val_b)) => Value::Bool(val_a <= val_b),
-            (Numeric::Float(val_a), Numeric::Float(val_b)) => Value::Bool(val_a <= val_b),
-            (Numeric::Float(val_a), Numeric::Int(val_b)) => Value::Bool(val_a <= val_b as f64),
-            (Numeric::Int(val_a), Numeric::Float(val_b)) => Value::Bool(val_a as f64 <= val_b),
-        };
-
-        self.stack.push(result);
-        Ok(())
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(VMError::TypeMismatch("Operands for LessOrEqualInt32 must be I32".to_string()))
+        }
     }
 
     fn handle_logical_and_operation(&mut self) -> Result<(), VMError> {
@@ -1191,14 +2003,14 @@ impl IrisVM {
     }
 
     fn handle_unconditional_jump(&mut self) -> Result<(), VMError> {
-        let offset = self.read_byte()? as usize;
+        let offset = self.read_u16()? as usize;
         let frame = self.current_frame_mut()?;
         frame.ip += offset;
         Ok(())
     }
 
     fn handle_jump_if_false(&mut self) -> Result<(), VMError> {
-        let offset = self.read_byte()? as usize;
+        let offset = self.read_u16()? as usize;
         let condition = self.pop_stack()?;
         let frame = self.current_frame_mut()?;
         if !condition.is_truthy() {
@@ -1208,7 +2020,7 @@ impl IrisVM {
     }
 
     fn handle_loop_jump(&mut self) -> Result<(), VMError> {
-        let offset = self.read_byte()? as usize;
+        let offset = self.read_u16()? as usize;
         let frame = self.current_frame_mut()?;
         frame.ip -= offset;
         Ok(())
@@ -1344,16 +2156,16 @@ impl IrisVM {
         Ok(())
     }
 
-    fn handle_get_super_class_method(&mut self, index: usize) -> Result<(), VMError> {
+    fn handle_get_super_class_method(&mut self, method_index: usize) -> Result<(), VMError> {
         let superclass_val = self.pop_stack()?;
         let instance_val = self.pop_stack()?;
 
         match (superclass_val, instance_val) {
             (Value::Class(superclass_rc), Value::Object(_instance_rc)) => {
-                if let Some(method) = superclass_rc.find_method(index) {
+                if let Some(method) = superclass_rc.find_method(method_index) {
                     self.stack.push(Value::Function(method));
                 } else {
-                    return Err(VMError::MethodNotFound(index));
+                    return Err(VMError::MethodNotFound(method_index));
                 }
             }
             _ => return Err(VMError::TypeMismatch("GetSuper expects a Class and an Object on the stack.".to_string())),
@@ -1366,7 +2178,7 @@ impl IrisVM {
             Value::Str(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Class name is not a string".to_string())),
         };
-        let class = Rc::new(Class::new(name, 0, None));
+        let class = Rc::new(Class::new(name.to_string(), 0, None));
         self.stack.push(Value::Class(class));
         Ok(())
     }
@@ -1425,7 +2237,7 @@ impl IrisVM {
         for _ in 0..num_entries {
             let value = self.pop_stack()?;
             let key_val = self.pop_stack()?;
-            if let Value::Str(key) = key_val {
+            if let Value::String(key) = key_val {
                 map.insert(key, value);
             } else {
                 return Err(VMError::NonStringKey);
@@ -1437,7 +2249,7 @@ impl IrisVM {
 
     fn handle_get_object_field(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Field name constant not found".to_string()))? {
-            Value::Str(s) => s.clone(),
+            Value::String(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Field name is not a string".to_string())),
         };
         let map_val = self.pop_stack()?;
@@ -1454,7 +2266,7 @@ impl IrisVM {
 
     fn handle_set_object_field(&mut self, name_index: usize) -> Result<(), VMError> {
         let name = match self.current_frame()?.function.constants().get(name_index).ok_or(VMError::InvalidOperand("Field name constant not found".to_string()))? {
-            Value::Str(s) => s.clone(),
+            Value::String(s) => s.clone(),
             _ => return Err(VMError::TypeMismatch("Field name is not a string".to_string())),
         };
         let value = self.pop_stack()?;
@@ -1715,14 +2527,8 @@ impl IrisVM {
                 OpCode::NotEqualFloat32 => self.handle_not_equal_float32()?,
                 OpCode::NotEqualFloat64 => self.handle_not_equal_float64()?,
                 OpCode::GreaterThanInt32 => self.handle_greater_than_int32()?,
-                OpCode::LessThanInt32 => {
-                    let b = self.stack.pop().ok_or(VMError::StackUnderflow)?;
-                    let a = self.stack.pop().ok_or(VMError::StackUnderflow)?;
-                    match (a, b) {
-                        (Value::I32(a_val), Value::I32(b_val)) => self.stack.push(Value::Bool(a_val < b_val)),
-                        _ => return Err(VMError::TypeMismatch("Operands for LessThanInt32 must be I32".to_string())),
-                    }
-                },
+                OpCode::LessThanInt32 => self.handle_less_than_int32()?,
+
                 OpCode::GreaterThanInt64 => self.handle_greater_than_int64()?,
                 OpCode::GreaterThanFloat32 => self.handle_greater_than_float32()?,
                 OpCode::GreaterThanFloat64 => self.handle_greater_than_float64()?,
@@ -1777,14 +2583,8 @@ impl IrisVM {
                 OpCode::BooleanAndOperation => self.handle_boolean_and_operation()?,
                 OpCode::BooleanOrOperation => self.handle_boolean_or_operation()?,
 
-                OpCode::AddInt32 => {
-                    let b = self.stack.pop().ok_or(VMError::StackUnderflow)?;
-                    let a = self.stack.pop().ok_or(VMError::StackUnderflow)?;
-                    match (a, b) {
-                        (Value::I32(a_val), Value::I32(b_val)) => self.stack.push(Value::I32(a_val + b_val)),
-                        _ => return Err(VMError::TypeMismatch("Operands for AddInt32 must be I32".to_string())),
-                    }
-                },
+                OpCode::AddInt32 => self.handle_add_int32()?,
+
                 OpCode::AddInt64 => self.handle_add_int64()?,
                 OpCode::AddFloat32 => self.handle_add_float32()?,
                 OpCode::AddFloat64 => self.handle_add_float64()?,
