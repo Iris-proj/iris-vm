@@ -1,45 +1,44 @@
 use crate::vm::value::Value;
 use crate::vm::vm::IrisVM;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum FunctionKind {
     Bytecode,
     Native,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Function {
     pub name: String,
     pub kind: FunctionKind,
     pub arity: usize,
     pub bytecode: Option<Vec<u8>>,
     pub constants: Vec<Value>, // Added constants field
+    #[serde(skip)]
     pub native: Option<fn(*mut IrisVM)>,
-    pub vm_ptr: *mut IrisVM,
 }
 
 impl Function {
-    pub fn new_bytecode(name: String, arity: usize, bytecode: Vec<u8>, constants: Vec<Value>, vm: *mut IrisVM) -> Self {
+    pub fn new_bytecode(name: String, arity: usize, bytecode: Vec<u8>, constants: Vec<Value>) -> Self {
         Self {
             name,
             kind: FunctionKind::Bytecode,
             arity,
             bytecode: Some(bytecode),
             constants, // Initialize constants
-            native: None,
-            vm_ptr: vm
+            native: None
         }
     }
 
-    pub fn new_native(name: String, arity: usize, native: fn(*mut IrisVM), vm: *mut IrisVM) -> Self {
+    pub fn new_native(name: String, arity: usize, native: fn(*mut IrisVM)) -> Self {
         Self {
             name,
             kind: FunctionKind::Native,
             arity,
             bytecode: None,
-            constants: Vec::new(), // Native functions don't have bytecode constants
-            native: Some(native),
-            vm_ptr: vm
+            constants: Vec::new(),
+            native: Some(native)
         }
     }
 

@@ -1,8 +1,9 @@
 use std::{rc::Rc, collections::HashMap, cell::RefCell};
 use crate::vm::object::{Instance, Class};
 use crate::vm::function::Function;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Value {
     Null,
     Bool(bool),
@@ -25,6 +26,7 @@ pub enum Value {
     Str(String),
     Object(Rc<Instance>),
     Function(Rc<Function>),
+    #[serde(skip)]
     NativeFunction(fn(Vec<Value>) -> Value),
     Class(Rc<Class>),
     Array(Rc<RefCell<Vec<Value>>>),
@@ -89,3 +91,4 @@ impl Value {
         }
     }
 }
+

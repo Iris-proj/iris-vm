@@ -1,4 +1,5 @@
 use crate::vm::value::Value;
+use serde::{Serialize, Deserialize};
 
 use super::opcode::OpCode;
 
@@ -6,6 +7,7 @@ pub trait ChunkWriter<T> {
     fn write(&mut self, value: T);
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Chunk {
     pub code: Vec<u8>,
     pub constants: Vec<Value>,
@@ -59,3 +61,10 @@ impl ChunkWriter<u16> for Chunk {
     }
 }
 
+impl ChunkWriter<i32> for Chunk {
+    fn write(&mut self, value: i32) {
+        for b in value.to_be_bytes() {
+            self.code.push(b);
+        }
+    }
+}
