@@ -1198,7 +1198,7 @@ impl IrisVM {
     }
 
     fn handle_jump_if_false(&mut self) -> Result<(), VMError> {
-        let offset = self.read_byte()? as usize;
+        let offset = self.read_u16()? as usize;
         let condition = self.pop_stack()?;
         let frame = self.current_frame_mut()?;
         if !condition.is_truthy() {
@@ -1208,7 +1208,7 @@ impl IrisVM {
     }
 
     fn handle_loop_jump(&mut self) -> Result<(), VMError> {
-        let offset = self.read_byte()? as usize;
+        let offset = self.read_u16()? as usize;
         let frame = self.current_frame_mut()?;
         frame.ip -= offset;
         Ok(())
@@ -1599,7 +1599,7 @@ impl IrisVM {
 
                 OpCode::GetLocalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_get_local_variable(slot)?
+                    self.handle_get_local_variable(slot)?;
                 }
                 OpCode::GetLocalVariable16 => {
                     let slot = self.read_u16()? as usize;
@@ -1607,7 +1607,7 @@ impl IrisVM {
                 }
                 OpCode::SetLocalVariable8 => {
                     let slot = self.read_byte()? as usize;
-                    self.handle_set_local_variable(slot)?
+                    self.handle_set_local_variable(slot)?;
                 }
                 OpCode::SetLocalVariable16 => {
                     let slot = self.read_u16()? as usize;
@@ -1683,10 +1683,14 @@ impl IrisVM {
                 OpCode::UnconditionalJump => self.handle_unconditional_jump()?,
                 OpCode::ShortJump => self.handle_short_jump()?,
                 OpCode::JumpIfTrue => self.handle_jump_if_true()?,
-                OpCode::JumpIfFalse => self.handle_jump_if_false()?,
+                OpCode::JumpIfFalse => {
+                    self.handle_jump_if_false()?;
+                },
                 OpCode::JumpIfNull => self.handle_jump_if_null()?,
                 OpCode::JumpIfNonNull => self.handle_jump_if_non_null()?,
-                OpCode::LoopJump => self.handle_loop_jump()?,
+                OpCode::LoopJump => {
+                    self.handle_loop_jump()?;
+                },
                 OpCode::LoopStartMarker => self.handle_loop_start_marker()?,
                 OpCode::LoopEndMarker => self.handle_loop_end_marker()?,
                 OpCode::CallFunction => self.handle_call_function()?,
@@ -1904,7 +1908,9 @@ impl IrisVM {
                 OpCode::LoadMethodInlineCache => self.handle_load_method_inline_cache()?,
                 OpCode::MegamorphicMethodCall => self.handle_megamorphic_method_call()?,
 
-                OpCode::PrintTopOfStack => self.handle_print_top_of_stack()?,
+                OpCode::PrintTopOfStack => {
+                    self.handle_print_top_of_stack()?;
+                },
             }
         }
         Ok(())

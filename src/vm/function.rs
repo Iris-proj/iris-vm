@@ -1,19 +1,21 @@
 use crate::vm::value::Value;
 use crate::vm::vm::IrisVM;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum FunctionKind {
     Bytecode,
     Native,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Function {
     pub name: String,
     pub kind: FunctionKind,
     pub arity: usize,
     pub bytecode: Option<Vec<u8>>,
     pub constants: Vec<Value>, // Added constants field
+    #[serde(skip)]
     pub native: Option<fn(*mut IrisVM)>,
 }
 

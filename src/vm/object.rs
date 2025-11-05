@@ -1,8 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 use crate::vm::function::Function;
 use crate::vm::value::Value;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Class {
     pub name: String,
     pub type_id: usize,
@@ -37,7 +38,7 @@ impl Class {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Instance {
     pub class: Rc<Class>,
     pub fields: Vec<Value>,
