@@ -23,14 +23,14 @@ pub enum Value {
     F32(f32),
     F64(f64),
     // Other types
-    Str(String),
+    Str(Rc<String>),
     Object(Rc<Instance>),
     Function(Rc<Function>),
     #[serde(skip)]
     NativeFunction(fn(Vec<Value>) -> Value),
     Class(Rc<Class>),
     Array(Rc<RefCell<Vec<Value>>>),
-    Map(Rc<RefCell<HashMap<String, Value>>>),
+    Map(Rc<RefCell<HashMap<Rc<String>, Value>>>),
 }
 
 impl PartialEq for Value {

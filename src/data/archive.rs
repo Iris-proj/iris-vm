@@ -10,7 +10,7 @@ pub fn create_archive(files: &[&str], archive_path: &str) -> Result<(), Box<dyn 
     let mut zip = ZipWriter::new(file);
 
     for &file_path in files {
-        let options = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        let options:FileOptions<()> = FileOptions::default().compression_method(zip::CompressionMethod::Stored);
         let mut f = File::open(file_path)?;
         let mut buffer = Vec::new();
         f.read_to_end(&mut buffer)?;

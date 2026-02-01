@@ -1,5 +1,5 @@
 use crate::vm::value::Value;
-use crate::vm::vm::IrisVM;
+use crate::vm::engine::IrisEngine;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,7 +16,7 @@ pub struct Function {
     pub bytecode: Option<Vec<u8>>,
     pub constants: Vec<Value>, // Added constants field
     #[serde(skip)]
-    pub native: Option<fn(*mut IrisVM)>,
+    pub native: Option<fn(*mut IrisEngine)>,
 }
 
 impl Function {
@@ -31,7 +31,7 @@ impl Function {
         }
     }
 
-    pub fn new_native(name: String, arity: usize, native: fn(*mut IrisVM)) -> Self {
+    pub fn new_native(name: String, arity: usize, native: fn(*mut IrisEngine)) -> Self {
         Self {
             name,
             kind: FunctionKind::Native,
@@ -46,7 +46,7 @@ impl Function {
         &self.constants
     }
 
-    pub fn switch_native(&mut self, native: fn(*mut IrisVM)){
+    pub fn switch_native(&mut self, native: fn(*mut IrisEngine)){
         self.native = Some(native);
         self.kind = FunctionKind::Native;
     }
