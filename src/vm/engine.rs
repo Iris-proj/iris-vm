@@ -303,579 +303,1402 @@ impl IrisEngine {
     }
 
     fn handle_call_dynamic_method(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let arg_count = self.read_byte()? as usize;
+        let method_name = self.pop_stack()?;
+        let instance = self.peek_stack(arg_count)?.clone();
+
+        if let Value::Str(name) = method_name {
+            if let Value::Object(obj) = instance {
+                if let Some(method_index) = obj.class.properties.get(name.as_ref()) {
+                    self.handle_invoke_method(*method_index, arg_count)
+                } else {
+                    Err(EngineError::MethodNotFound(0)) // improve error
+                }
+            } else {
+                Err(EngineError::NonObjectValue)
+            }
+        } else {
+            Err(EngineError::TypeMismatch("Method name must be a string".to_string()))
+        }
     }
 
     fn handle_initialize_class(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // Assuming this is for static initialization, which might not be implemented yet.
+        Ok(())
     }
 
     fn handle_check_cast_object(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let class_val = self.pop_stack()?;
+        let instance_val = self.peek_stack(0)?;
+        if let (Value::Class(class), Value::Object(instance)) = (class_val, instance_val) {
+            if instance.class.type_id == class.type_id {
+                Ok(())
+            } else {
+                Err(EngineError::TypeMismatch("Invalid cast".to_string()))
+            }
+        } else {
+            Err(EngineError::TypeMismatch("Invalid types for cast".to_string()))
+        }
     }
 
     fn handle_instance_of_check(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let class_val = self.pop_stack()?;
+        let instance_val = self.pop_stack()?;
+        if let (Value::Class(class), Value::Object(instance)) = (class_val, instance_val) {
+            let mut current_class = Some(instance.class.clone());
+            let mut is_instance = false;
+            while let Some(c) = current_class {
+                if c.type_id == class.type_id {
+                    is_instance = true;
+                    break;
+                }
+                current_class = c.superclass.clone();
+            }
+            self.stack.push(Value::Bool(is_instance));
+        } else {
+            self.stack.push(Value::Bool(false));
+        }
+        Ok(())
     }
 
     fn handle_load_method_handle(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let method_index = self.read_u16()? as usize;
+        let instance = self.pop_stack()?;
+        if let Value::Object(obj) = instance {
+            if let Some(method) = obj.class.find_method(method_index) {
+                self.stack.push(Value::Function(method));
+                Ok(())
+            } else {
+                Err(EngineError::MethodNotFound(method_index))
+            }
+        } else {
+            Err(EngineError::NonObjectValue)
+        }
     }
 
     fn handle_bind_method_handle(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // This is complex, and likely requires closures or a new `BoundMethod` value type.
+        // For now, let's assume it's a no-op until more of the language is defined.
+        Ok(())
     }
 
     fn handle_get_virtual_table(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // Virtual tables are implicit in this VM design via the `class` field on instances.
+        // This might be for a different object model.
+        Err(EngineError::InvalidOperand("GetVirtualTable is not supported".to_string()))
     }
 
     fn handle_set_virtual_table(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // Virtual tables are implicit and immutable for instances.
+        Err(EngineError::InvalidOperand("SetVirtualTable is not supported".to_string()))
     }
 
     fn handle_allocate_object(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // Object allocation is handled by `CreateNewInstance`.
+        // This opcode seems redundant in the current design.
+        Err(EngineError::InvalidOperand("AllocateObject is not supported, use CreateNewInstance".to_string()))
     }
 
     fn handle_free_object(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No manual memory management, this is a no-op.
+        let _ = self.pop_stack()?;
+        Ok(())
     }
 
     fn handle_short_jump(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_byte()? as i8;
+        let frame = self.current_frame_mut()?;
+        frame.ip = (frame.ip as isize + offset as isize) as usize;
+        Ok(())
     }
 
     fn handle_jump_if_true(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let condition = self.pop_stack()?;
+        if condition.is_truthy() {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_jump_if_null(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let value = self.pop_stack()?;
+        if let Value::Null = value {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_jump_if_non_null(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let value = self.pop_stack()?;
+        if !matches!(value, Value::Null) {
+            let frame = self.current_frame_mut()?;
+            frame.ip += offset;
+        }
+        Ok(())
     }
 
     fn handle_loop_start_marker(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No-op, for debugger or optimizer
+        Ok(())
     }
 
     fn handle_loop_end_marker(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No-op, for debugger or optimizer
+        Ok(())
     }
 
     fn handle_tail_call_function(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // For now, implement as a normal call. A true tail call would replace the current frame.
+        self.handle_call_function()
     }
 
     fn handle_table_switch(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("TableSwitch is not implemented".to_string()))
     }
 
     fn handle_lookup_switch(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("LookupSwitch is not implemented".to_string()))
     }
 
     fn handle_range_switch(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("RangeSwitch is not implemented".to_string()))
     }
 
     fn handle_catch_exception(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("CatchException is not implemented".to_string()))
     }
 
     fn handle_finally_block(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("FinallyBlock is not implemented".to_string()))
     }
 
     fn handle_unwind_stack(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("UnwindStack is not implemented".to_string()))
     }
 
     fn handle_boolean_and_operation(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        self.stack.push(Value::Bool(a.is_truthy() && b.is_truthy()));
+        Ok(())
     }
 
     fn handle_boolean_or_operation(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        self.stack.push(Value::Bool(a.is_truthy() || b.is_truthy()));
+        Ok(())
     }
 
     fn handle_bitwise_and_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val & b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for bitwise AND".to_string()))
+        }
     }
 
     fn handle_bitwise_or_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val | b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for bitwise OR".to_string()))
+        }
     }
 
     fn handle_bitwise_xor_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val ^ b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for bitwise XOR".to_string()))
+        }
     }
 
     fn handle_bitwise_not_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let a = self.pop_stack()?;
+        if let Value::I64(a_val) = a {
+            self.stack.push(Value::I64(!a_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for bitwise NOT".to_string()))
+        }
     }
 
     fn handle_left_shift_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val << b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for left shift".to_string()))
+        }
     }
 
     fn handle_right_shift_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val >> b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for right shift".to_string()))
+        }
     }
 
     fn handle_unsigned_right_shift_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32((a_val as u32 >> b_val as u32) as i32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for unsigned right shift".to_string()))
+        }
     }
 
     fn handle_unsigned_right_shift_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64((a_val as u64 >> b_val as u64) as i64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for unsigned right shift".to_string()))
+        }
     }
 
     fn handle_rotate_left_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.rotate_left(b_val as u32)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for rotate left".to_string()))
+        }
     }
 
     fn handle_rotate_right_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.rotate_right(b_val as u32)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for rotate right".to_string()))
+        }
     }
 
     fn handle_add_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_add(b_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for addition".to_string()))
+        }
     }
 
     fn handle_add_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val + b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for addition".to_string()))
+        }
     }
 
     fn handle_add_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val + b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for addition".to_string()))
+        }
     }
 
     fn handle_subtract_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_sub(b_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for subtraction".to_string()))
+        }
     }
 
     fn handle_subtract_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val - b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for subtraction".to_string()))
+        }
     }
 
     fn handle_subtract_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val - b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for subtraction".to_string()))
+        }
     }
 
     fn handle_multiply_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::I64(a_val.wrapping_mul(b_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for multiplication".to_string()))
+        }
     }
 
     fn handle_multiply_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val * b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for multiplication".to_string()))
+        }
     }
 
     fn handle_multiply_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val * b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for multiplication".to_string()))
+        }
     }
 
     fn handle_divide_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(EngineError::DivisionByZero);
+            }
+            self.stack.push(Value::I64(a_val / b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for division".to_string()))
+        }
     }
 
     fn handle_divide_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::F32(a_val / b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for division".to_string()))
+        }
     }
 
     fn handle_divide_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::F64(a_val / b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for division".to_string()))
+        }
     }
 
     fn handle_modulo_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            if b_val == 0 {
+                return Err(EngineError::DivisionByZero);
+            }
+            self.stack.push(Value::I64(a_val % b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for modulo".to_string()))
+        }
     }
 
     fn handle_negate_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let a = self.pop_stack()?;
+        if let Value::I64(a_val) = a {
+            self.stack.push(Value::I64(-a_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for negation".to_string()))
+        }
     }
 
     fn handle_negate_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let a = self.pop_stack()?;
+        if let Value::F32(a_val) = a {
+            self.stack.push(Value::F32(-a_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for negation".to_string()))
+        }
     }
 
     fn handle_negate_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let a = self.pop_stack()?;
+        if let Value::F64(a_val) = a {
+            self.stack.push(Value::F64(-a_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for negation".to_string()))
+        }
     }
 
     fn handle_increment_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I32(i.wrapping_add(1)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for increment".to_string()))
+        }
     }
 
     fn handle_decrement_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I32(i.wrapping_sub(1)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for decrement".to_string()))
+        }
     }
 
     fn handle_increment_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I64(i.wrapping_add(1)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for increment".to_string()))
+        }
     }
 
     fn handle_decrement_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I64(i.wrapping_sub(1)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for decrement".to_string()))
+        }
     }
 
     fn handle_add_int32_with_constant(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let constant = self.read_i32()?;
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I32(i.wrapping_add(constant)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for add with constant".to_string()))
+        }
     }
 
     fn handle_add_int64_with_constant(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let constant = self.read_i64()?;
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I64(i.wrapping_add(constant)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for add with constant".to_string()))
+        }
     }
 
     fn handle_multiply_int32_with_constant(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let constant = self.read_i32()?;
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I32(i.wrapping_mul(constant)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for multiply with constant".to_string()))
+        }
     }
 
     fn handle_multiply_int64_with_constant(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let constant = self.read_i64()?;
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I64(i.wrapping_mul(constant)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for multiply with constant".to_string()))
+        }
     }
 
     fn handle_fused_multiply_add_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val), Value::F32(c_val)) = (a, b, c) {
+            self.stack.push(Value::F32(a_val.mul_add(b_val, c_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected three F32 values for fused multiply-add".to_string()))
+        }
     }
 
     fn handle_fused_multiply_add_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let c = self.pop_stack()?;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val), Value::F64(c_val)) = (a, b, c) {
+            self.stack.push(Value::F64(a_val.mul_add(b_val, c_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected three F64 values for fused multiply-add".to_string()))
+        }
     }
 
     fn handle_absolute_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I32(i.abs()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for absolute".to_string()))
+        }
     }
 
     fn handle_absolute_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I64(i.abs()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for absolute".to_string()))
+        }
     }
 
     fn handle_absolute_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.abs()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for absolute".to_string()))
+        }
     }
 
     fn handle_absolute_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(f) = val {
+            self.stack.push(Value::F64(f.abs()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for absolute".to_string()))
+        }
     }
 
     fn handle_floor_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.floor()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for floor".to_string()))
+        }
     }
 
     fn handle_ceil_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.ceil()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for ceil".to_string()))
+        }
     }
 
     fn handle_round_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.round()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for round".to_string()))
+        }
     }
 
     fn handle_truncate_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.trunc()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for truncate".to_string()))
+        }
     }
 
     fn handle_square_root_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F32(f.sqrt()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for square root".to_string()))
+        }
     }
 
     fn handle_square_root_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(f) = val {
+            self.stack.push(Value::F64(f.sqrt()));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for square root".to_string()))
+        }
     }
 
     fn handle_equal_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for equality comparison".to_string()))
+        }
     }
 
     fn handle_equal_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for equality comparison".to_string()))
+        }
     }
 
     fn handle_equal_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val == b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for equality comparison".to_string()))
+        }
     }
 
     fn handle_not_equal_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for inequality comparison".to_string()))
+        }
     }
 
     fn handle_not_equal_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for inequality comparison".to_string()))
+        }
     }
 
     fn handle_not_equal_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val != b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for inequality comparison".to_string()))
+        }
     }
 
     fn handle_greater_than_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_greater_than_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_greater_than_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_less_than_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_less_than_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_less_than_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I64(a_val), Value::I64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I64 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F32(a_val), Value::F32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F32 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::F64(a_val), Value::F64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two F64 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_equal_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val == b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for compare and branch".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_not_equal_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val != b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for compare and branch".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_less_than_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val < b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for compare and branch".to_string()))
+        }
     }
 
     fn handle_compare_and_branch_greater_than_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let offset = self.read_u16()? as usize;
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            if a_val > b_val {
+                self.current_frame_mut()?.ip += offset;
+            }
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for compare and branch".to_string()))
+        }
     }
 
     fn handle_greater_unsigned8(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U8 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_greater_unsigned16(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U16 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_greater_unsigned32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U32 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_greater_unsigned64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val > b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U64 values for greater than comparison".to_string()))
+        }
     }
 
     fn handle_less_unsigned8(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U8 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_less_unsigned16(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U16 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_less_unsigned32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U32 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_less_unsigned64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val < b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U64 values for less than comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned8(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U8 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned16(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U16 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U32 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_greater_or_equal_unsigned64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val >= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U64 values for greater or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned8(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U8(a_val), Value::U8(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U8 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned16(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U16(a_val), Value::U16(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U16 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U32(a_val), Value::U32(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U32 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_less_or_equal_unsigned64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::U64(a_val), Value::U64(b_val)) = (a, b) {
+            self.stack.push(Value::Bool(a_val <= b_val));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two U64 values for less or equal comparison".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::I64(i as i64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::F32(i as f32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_int32_to_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I32(i) = val {
+            self.stack.push(Value::F64(i as f64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::I32(i as i32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::F32(i as f32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_int64_to_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::I64(i) = val {
+            self.stack.push(Value::F64(i as f64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an I64 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::I32(f as i32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::I64(f as i64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float32_to_float64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F32(f) = val {
+            self.stack.push(Value::F64(f as f64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F32 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(f) = val {
+            self.stack.push(Value::I32(f as i32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_int64(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(f) = val {
+            self.stack.push(Value::I64(f as i64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for conversion".to_string()))
+        }
     }
 
     fn handle_convert_float64_to_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let val = self.pop_stack()?;
+        if let Value::F64(f) = val {
+            self.stack.push(Value::F32(f as f32));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a F64 value for conversion".to_string()))
+        }
     }
 
     fn handle_get_array_length(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let array_val = self.pop_stack()?;
+        if let Value::Array(arr) = array_val {
+            self.stack.push(Value::I64(arr.borrow().len() as i64));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an array to get length".to_string()))
+        }
     }
 
     fn handle_resize_array(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let size_val = self.pop_stack()?;
+        let array_val = self.pop_stack()?;
+        if let (Value::Array(arr), Value::I64(size)) = (array_val, size_val) {
+            arr.borrow_mut().resize(size as usize, Value::Null);
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected an array and an integer size for resize".to_string()))
+        }
     }
 
     fn handle_get_array_index_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("GetArrayIndexFloat32 is not supported".to_string()))
     }
 
     fn handle_set_array_index_float32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("SetArrayIndexFloat32 is not supported".to_string()))
     }
 
     fn handle_get_array_index_fast_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        self.handle_get_array_index()
     }
 
     fn handle_set_array_index_fast_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        self.handle_set_array_index()
     }
 
     fn handle_map_contains_key(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::Str(key)) = (map_val, key_val) {
+            self.stack.push(Value::Bool(map.borrow().contains_key(&key)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a map and a string key for contains key".to_string()))
+        }
     }
 
     fn handle_map_remove_key(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::Str(key)) = (map_val, key_val) {
+            let removed_val = map.borrow_mut().remove(&key).unwrap_or(Value::Null);
+            self.stack.push(removed_val);
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a map and a string key for remove key".to_string()))
+        }
     }
 
     fn handle_map_get_or_default_value(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let default_val = self.pop_stack()?;
+        let key_val = self.pop_stack()?;
+        let map_val = self.pop_stack()?;
+        if let (Value::Map(map), Value::Str(key)) = (map_val, key_val) {
+            let value = map.borrow().get(&key).cloned().unwrap_or(default_val);
+            self.stack.push(value);
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected a map, a string key and a default value for get or default".to_string()))
+        }
     }
 
     fn handle_allocate_slice(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("AllocateSlice is not implemented".to_string()))
     }
 
     fn handle_atomic_add_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.wrapping_add(b_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for atomic add".to_string()))
+        }
     }
 
     fn handle_atomic_subtract_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
+        if let (Value::I32(a_val), Value::I32(b_val)) = (a, b) {
+            self.stack.push(Value::I32(a_val.wrapping_sub(b_val)));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected two I32 values for atomic subtract".to_string()))
+        }
     }
 
     fn handle_atomic_compare_and_swap_int32(&mut self) -> Result<(), EngineError> {
-        todo!()
+        let expected = self.pop_stack()?;
+        let new_val = self.pop_stack()?;
+        let val = self.pop_stack()?;
+        if let (Value::I32(val), Value::I32(expected), Value::I32(new_val)) = (val, expected, new_val) {
+            if val == expected {
+                self.stack.push(Value::I32(new_val));
+            } else {
+                self.stack.push(Value::I32(val));
+            }
+            self.stack.push(Value::Bool(val == expected));
+            Ok(())
+        } else {
+            Err(EngineError::TypeMismatch("Expected three I32 values for atomic compare and swap".to_string()))
+        }
     }
 
     fn handle_enter_monitor(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No-op in single-threaded context
+        Ok(())
     }
 
     fn handle_exit_monitor(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No-op in single-threaded context
+        Ok(())
     }
 
     fn handle_yield_current_thread(&mut self) -> Result<(), EngineError> {
-        todo!()
+        // No-op in single-threaded context
+        std::thread::yield_now();
+        Ok(())
     }
 
     fn handle_call_with_inline_cache(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("CallWithInlineCache is not implemented".to_string()))
     }
 
     fn handle_call_with_inline_cache_inline(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("CallWithInlineCacheInline is not implemented".to_string()))
     }
 
     fn handle_get_property_with_inline_cache(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("GetPropertyWithInlineCache is not implemented".to_string()))
     }
 
     fn handle_get_property_with_inline_cache_inline(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("GetPropertyWithInlineCacheInline is not implemented".to_string()))
     }
 
     fn handle_set_property_with_inline_cache(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("SetPropertyWithInlineCache is not implemented".to_string()))
     }
 
     fn handle_load_method_inline_cache(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("LoadMethodInlineCache is not implemented".to_string()))
     }
 
     fn handle_megamorphic_method_call(&mut self) -> Result<(), EngineError> {
-        todo!()
+        Err(EngineError::InvalidOperand("MegamorphicMethodCall is not implemented".to_string()))
     }
 
         #[allow(dead_code)]
