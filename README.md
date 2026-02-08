@@ -31,4 +31,4 @@ Contributions are welcome! If you'd like to contribute to the project, please fo
 
 ## License
 
-Iris VM is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+Iris VM is licensed under the GPL License. See the [LICENSE](LICENSE) file for more information.
